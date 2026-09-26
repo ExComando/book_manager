@@ -1,5 +1,11 @@
 # Changelog
 
+[Ejercicio 05]
+- Desarrollo del módulo de precarga de datos en `preload_data.py`.
+- Generación automática de archivos CSV en la ruta `migrations/csv` cumpliendo con el mínimo de 10 registros por clase.
+- Implementación de datos temáticos (fusión de Romance y Deep Learning).
+- Funcionalidad para leer los CSV e inyectar los datos en los repositorios correspondientes.
+
 [Ejercicio 04]
 - Creación de clases de servicio (`LibroService`, `CotizacionService`, `PrecioService`) para encapsular la lógica de negocio.
 - Implementación de método para el registro simultáneo de un libro y su stock inicial.
