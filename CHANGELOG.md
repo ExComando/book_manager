@@ -1,5 +1,11 @@
 # Changelog
 
+[Ejercicio 06]
+- Desarrollo de la interfaz gráfica de línea de comandos (CLI) en `console.py`.
+- Implementación de un sistema de navegación por menús interactivos y limpieza de pantalla.
+- Diseño corporativo y formateo tabular para la lectura de datos.
+- Integración de las operaciones CRUD (alta, baja, modificación, lectura) consumiendo la capa de servicios.
+
 [Ejercicio 05]
 - Desarrollo del módulo de precarga de datos en `preload_data.py`.
 - Generación automática de archivos CSV en la ruta `migrations/csv` cumpliendo con el mínimo de 10 registros por clase.
