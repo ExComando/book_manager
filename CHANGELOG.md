@@ -1,5 +1,10 @@
 # Changelog
 
+[Ejercicio 07]
+- Creación del archivo de entrada `main.py`.
+- Implementación de inyección de dependencias (repositorios instanciados hacia servicios, y servicios hacia la interfaz).
+- Incorporación del parámetro `import_default_data` en la función main para controlar la ejecución desde entornos externos (Colab).
+
 [Ejercicio 06]
 - Desarrollo de la interfaz gráfica de línea de comandos (CLI) en `console.py`.
 - Implementación de un sistema de navegación por menús interactivos y limpieza de pantalla.
