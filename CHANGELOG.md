@@ -1,5 +1,10 @@
 # Changelog
 
+[Ejercicio 04]
+- Creación de clases de servicio (`LibroService`, `CotizacionService`, `PrecioService`) para encapsular la lógica de negocio.
+- Implementación de método para el registro simultáneo de un libro y su stock inicial.
+- Desarrollo de la lógica de conversión de precios en tiempo real buscando la cotización más reciente del dólar.
+
 [Ejercicio 03]
 - Implementación de las interfaces de repositorios según la consigna.
 - Desarrollo de las clases concretas de persistencia en memoria (RepositorioLibro, RepositorioGenero, RepositorioEditorial, RepositorioStock, RepositorioCotizacionDolar).
