@@ -1,5 +1,10 @@
 # Changelog
 
+[Ejercicio 03]
+- Implementación de las interfaces de repositorios según la consigna.
+- Desarrollo de las clases concretas de persistencia en memoria (RepositorioLibro, RepositorioGenero, RepositorioEditorial, RepositorioStock, RepositorioCotizacionDolar).
+- Incorporación de los métodos CRUD (crear, leer, actualizar, eliminar) para cada repositorio.
+
 [Ejercicio 02]
 - Creación de clases entidad (Libro, Genero, Editorial, Moneda, TipoCotizacion, Precio, Stock, CotizacionDolar).
 - Implementación de encapsulamiento mediante propiedades y atributos privados.
