@@ -14,7 +14,7 @@ class ConsoleUI:
     def imprimir_encabezado(self, titulo: str):
         self.limpiar_pantalla()
         print("=" * 80)
-        print(f" AGUAS DE FORMOSA - SISTEMA DE GESTIÓN BIBLIOGRÁFICA ".center(80, "="))
+        print(f" CUSPIDE - SISTEMA DE GESTIÓN BIBLIOGRÁFICA ".center(80, "="))
         print(f" {titulo} ".center(80, " "))
         print("=" * 80)
         print()
@@ -65,19 +65,29 @@ class ConsoleUI:
                 input("\nOpción no válida. Presione Enter para reintentar...")
 
     def _listar_libros(self):
-        self.imprimir_encabezado("CATÁLOGO DE LIBROS Y STOCK")
+        self.imprimir_encabezado("CATÁLOGO DE LIBROS Y STOCK (Cálculo a Dólar Blue)")
         libros_stock = self.libro_service.listar_libros_con_stock()
         
         if not libros_stock:
             print("El catálogo está vacío.")
         else:
-            # Formato tabular profesional
-            print(f"{'ISBN':<15} | {'TÍTULO':<40} | {'AUTOR':<20} | {'STOCK':<5}")
-            print("-" * 85)
+            print(f"{'ISBN':<15} | {'TÍTULO':<35} | {'STOCK':<5} | {'PRECIO ARS':<15}")
+            print("-" * 80)
             for libro, cantidad in libros_stock:
-                titulo_corto = (libro.titulo[:37] + '...') if len(libro.titulo) > 40 else libro.titulo
-                autor_corto = (libro.autor[:17] + '...') if len(libro.autor) > 20 else libro.autor
-                print(f"{libro.isbn:<15} | {titulo_corto:<40} | {autor_corto:<20} | {cantidad:<5}")
+                titulo_corto = (libro.titulo[:32] + '...') if len(libro.titulo) > 35 else libro.titulo
+                
+                # Obtenemos precio y calculamos ARS
+                precio_base = self.precio_service.obtener_precio_base(libro.isbn)
+                precio_str = "N/A"
+                if precio_base:
+                    try:
+                        # Cotiza usando el Dólar Blue (ID 2 = $1560)
+                        precio_ars = self.precio_service.calcular_precio_ars(precio_base, 2)
+                        precio_str = f"$ {precio_ars:,.2f}"
+                    except ValueError:
+                        pass
+
+                print(f"{libro.isbn:<15} | {titulo_corto:<35} | {cantidad:<5} | {precio_str:<15}")
         
         input("\nPresione Enter para continuar...")
 

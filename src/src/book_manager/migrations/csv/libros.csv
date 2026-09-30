@@ -1,0 +1,11 @@
+isbn,titulo,autor,id_editorial,id_genero
+978-0262035613,Deep Learning,Ian Goodfellow,1,2
+978-1492032649,Hands-On Machine Learning,Aurélien Géron,2,3
+978-0387310732,Pattern Recognition and Machine Learning,Christopher Bishop,3,2
+978-8408193488,Orgullo y Prejuicio,Jane Austen,4,1
+978-8420412146,Cumbres Borrascosas,Emily Brontë,5,1
+978-8483832230,El amor en los tiempos del cólera,Gabriel García Márquez,6,1
+978-1617294433,Deep Learning with Python,François Chollet,7,2
+978-8415594017,Bajo la misma estrella,John Green,4,1
+978-0134610993,Artificial Intelligence: A Modern Approach,Stuart Russell,8,3
+978-8433979435,Yo antes de ti,Jojo Moyes,9,1

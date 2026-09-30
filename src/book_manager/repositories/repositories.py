@@ -221,3 +221,35 @@ class RepositorioCotizacionDolar(IRepositorioCotizacionDolar):
             del self._datos[clave]
             return True
         return False
+
+class IRepositorioPrecio(abc.ABC):
+    @abc.abstractmethod
+    def crear(self, precio: Precio) -> Precio:
+        pass
+
+    @abc.abstractmethod
+    def leer_por_libro(self, isbn: str) -> Optional[Precio]:
+        pass
+
+    @abc.abstractmethod
+    def actualizar(self, precio: Precio) -> Precio:
+        pass
+
+class RepositorioPrecio(IRepositorioPrecio):
+    def __init__(self):
+        self._datos: Dict[str, Precio] = {}
+
+    def crear(self, precio: Precio) -> Precio:
+        if precio.libro.isbn in self._datos:
+            raise ValueError("Ya existe un precio registrado para este libro.")
+        self._datos[precio.libro.isbn] = precio
+        return precio
+
+    def leer_por_libro(self, isbn: str) -> Optional[Precio]:
+        return self._datos.get(isbn)
+
+    def actualizar(self, precio: Precio) -> Precio:
+        if precio.libro.isbn not in self._datos:
+            raise ValueError("Precio no encontrado para actualizar.")
+        self._datos[precio.libro.isbn] = precio
+        return precio    

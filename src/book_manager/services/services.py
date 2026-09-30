@@ -3,6 +3,7 @@ from book_manager.entities.entities import Libro, Stock, CotizacionDolar, Precio
 from book_manager.repositories.repositories import (
     RepositorioLibro, RepositorioStock, RepositorioCotizacionDolar
 )
+from book_manager.repositories.repositories import RepositorioPrecio
 
 class LibroService:
     def __init__(self, repo_libro: RepositorioLibro, repo_stock: RepositorioStock):
@@ -54,11 +55,15 @@ class CotizacionService:
 
 
 class PrecioService:
-    def __init__(self, cotizacion_service: CotizacionService):
+    def __init__(self, repo_precio: RepositorioPrecio, cotizacion_service: CotizacionService):
+        self.repo_precio = repo_precio
         self.cotizacion_service = cotizacion_service
 
+    def obtener_precio_base(self, isbn: str) -> Optional[Precio]:
+        """Devuelve el objeto Precio base (en USD) de un libro."""
+        return self.repo_precio.leer_por_libro(isbn)
+
     def calcular_precio_ars(self, precio_usd: Precio, tipo_cotizacion_id: int) -> float:
-        """Toma el precio base en USD del libro y lo multiplica por la cotización de la fecha."""
         if precio_usd.moneda.codigo != "USD":
             raise ValueError("El precio base debe estar en USD para calcular la conversión.")
         
