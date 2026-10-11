@@ -2,7 +2,11 @@
 
 # Sprint 2
 
-
+[Ejercicio 05]
+- Función migrar_datos() en migrations/migrations.py: lee los CSV del Sprint 1, genera los .sql y puebla la base.
+- Archivos .sql por tabla (migrations/sql) numerados según el orden de dependencias.
+- Ejecución en una única transacción y repetible sin duplicar datos (ON CONFLICT DO NOTHING).
+- Validación y escape de los valores antes de armar las sentencias.
 
 [Ejercicio 04] 
 
