@@ -2,6 +2,11 @@
 
 # Sprint 2
 
+[Ejercicio 03] - 12/10/2026
+- Context manager transaccion() en ConexionDB para manejar transacciones.
+- Commit automático al terminar el bloque y rollback ante cualquier excepción.
+- Cierre de la sesión en todos los casos.
+
 [Ejercicio 02] - 11/10/2026
 
 - Clase ConexionDB (database/connection.py) con SQLAlchemy.
