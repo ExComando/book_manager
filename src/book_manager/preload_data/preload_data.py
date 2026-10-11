@@ -1,122 +1,140 @@
-import csv
+"""Datos de ejemplo del sistema. Genera los CSV en migrations/csv."""
+import datetime
 import os
-from datetime import date
+from decimal import Decimal
+from typing import List
+
 from book_manager.entities.entities import (
-    Genero, Editorial, Moneda, TipoCotizacion, Libro, CotizacionDolar, Precio, Stock
-)
+    CotizacionDolar, Editorial, Genero, Libro, Moneda, Precio, Stock, TipoCotizacion)
 from book_manager.repositories.repositories import (
-    RepositorioLibro, RepositorioGenero, RepositorioEditorial, RepositorioStock, RepositorioCotizacionDolar, RepositorioPrecio
-)
+    RUTA_CSV_DEFECTO, RepositorioCotizacionDolar, RepositorioEditorial,
+    RepositorioGenero, RepositorioLibro, RepositorioMoneda, RepositorioPrecio,
+    RepositorioStock, RepositorioTipoCotizacion)
 
-RUTA_CSV = "src/book_manager/migrations/csv"
+ARCHIVOS: List[str] = [
+    "generos.csv", "editoriales.csv", "monedas.csv", "tipos_cotizacion.csv",
+    "libros.csv", "precios.csv", "stock.csv", "cotizaciones.csv"]
 
-def generar_archivos_csv():
-    os.makedirs(RUTA_CSV, exist_ok=True)
-    
-    # Géneros y Editoriales
-    generos = [[1, "Romance"], [2, "Deep Learning"], [3, "Inteligencia Artificial"], [4, "Novela Histórica"], [5, "Ciencia Ficción"], [6, "Terror"], [7, "Fantasía"], [8, "Desarrollo Personal"], [9, "Thriller"], [10, "Ensayo"]]
-    with open(f"{RUTA_CSV}/generos.csv", "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["id_genero", "nombre"])
-        writer.writerows(generos)
+GENEROS = ["Novela", "Cuento", "Ensayo", "Infantil", "Técnico", "Poesía",
+           "Historia", "Ciencia ficción", "Biografía", "Policial"]
 
-    editoriales = [[1, "MIT Press"], [2, "O'Reilly Media"], [3, "Springer"], [4, "Planeta"], [5, "Alfaguara"], [6, "Tusquets"], [7, "Manning Publications"], [8, "Packt"], [9, "Anagrama"], [10, "Sexto Piso"]]
-    with open(f"{RUTA_CSV}/editoriales.csv", "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["id_editorial", "nombre"])
-        writer.writerows(editoriales)
+EDITORIALES = [
+    ("Sudamericana", "Argentina"), ("Planeta", "España"), ("Alfaguara", "España"),
+    ("Anagrama", "España"), ("Siglo XXI Editores", "Argentina"),
+    ("Fondo de Cultura Económica", "México"), ("Eudeba", "Argentina"),
+    ("Alianza Editorial", "España"), ("Kapelusz", "Argentina"),
+    ("Penguin Random House", "Estados Unidos")]
 
-    libros = [
-        ["978-0262035613", "Deep Learning", "Ian Goodfellow", 1, 2],
-        ["978-1492032649", "Hands-On Machine Learning", "Aurélien Géron", 2, 3],
-        ["978-0387310732", "Pattern Recognition and Machine Learning", "Christopher Bishop", 3, 2],
-        ["978-8408193488", "Orgullo y Prejuicio", "Jane Austen", 4, 1],
-        ["978-8420412146", "Cumbres Borrascosas", "Emily Brontë", 5, 1],
-        ["978-8483832230", "El amor en los tiempos del cólera", "Gabriel García Márquez", 6, 1],
-        ["978-1617294433", "Deep Learning with Python", "François Chollet", 7, 2],
-        ["978-8415594017", "Bajo la misma estrella", "John Green", 4, 1],
-        ["978-0134610993", "Artificial Intelligence: A Modern Approach", "Stuart Russell", 8, 3],
-        ["978-8433979435", "Yo antes de ti", "Jojo Moyes", 9, 1]
-    ]
-    with open(f"{RUTA_CSV}/libros.csv", "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["isbn", "titulo", "autor", "id_editorial", "id_genero"])
-        writer.writerows(libros)
+MONEDAS = [
+    ("ARS", "Peso argentino", "$"), ("USD", "Dólar estadounidense", "US$"),
+    ("EUR", "Euro", "€"), ("BRL", "Real brasileño", "R$"),
+    ("CLP", "Peso chileno", "CLP$"), ("UYU", "Peso uruguayo", "$U"),
+    ("GBP", "Libra esterlina", "£"), ("CHF", "Franco suizo", "CHF"),
+    ("JPY", "Yen japonés", "¥"), ("MXN", "Peso mexicano", "MX$")]
 
-    monedas = [[1, "ARS", "$"], [2, "USD", "u$s"], [3, "EUR", "€"]]
-    with open(f"{RUTA_CSV}/monedas.csv", "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["id_moneda", "codigo", "simbolo"])
-        writer.writerows(monedas)
+TIPOS_COTIZACION = ["Oficial", "Blue", "MEP", "CCL", "Mayorista",
+                    "Tarjeta", "Cripto", "Banco Nación", "Promedio", "Turista"]
 
-    tipos_cotizacion = [[1, "Oficial"], [2, "Blue"], [3, "MEP"]]
-    with open(f"{RUTA_CSV}/tipos_cotizacion.csv", "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["id_tipo", "nombre"])
-        writer.writerows(tipos_cotizacion)
+# (título, autor, id_género, id_editorial, precio_usd, stock)
+LIBROS = [
+    ("Rayuela", "Julio Cortázar", 1, 1, "18.50", 12),
+    ("El Aleph", "Jorge Luis Borges", 2, 8, "15.00", 3),
+    ("Martín Fierro", "José Hernández", 6, 9, "9.90", 25),
+    ("Sobre héroes y tumbas", "Ernesto Sábato", 1, 2, "16.75", 7),
+    ("El Principito", "Antoine de Saint-Exupéry", 4, 3, "11.20", 30),
+    ("Clean Code", "Robert C. Martin", 5, 10, "42.00", 4),
+    ("Fundación", "Isaac Asimov", 8, 4, "17.30", 9),
+    ("Los siete locos", "Roberto Arlt", 1, 7, "13.40", 0),
+    ("Breve historia de los argentinos", "Félix Luna", 7, 2, "14.60", 15),
+    ("Las venas abiertas de América Latina", "Eduardo Galeano", 3, 5, "19.80", 6),
+    ("Ficciones", "Jorge Luis Borges", 2, 6, "14.10", 18),
+    ("El nombre de la rosa", "Umberto Eco", 10, 10, "21.90", 2)]
 
-    # Cotizaciones reales indicadas por el usuario
-    cotizaciones = [
-        [1, "2026-09-29", 1545.00], 
-        [2, "2026-09-29", 1560.00], 
-        [3, "2026-09-29", 1250.00]
-    ]
-    with open(f"{RUTA_CSV}/cotizaciones.csv", "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["id_tipo", "fecha", "valor_venta"])
-        writer.writerows(cotizaciones)
+# id_libro -> precio en pesos (solo algunos libros tienen precio fijo en ARS)
+PRECIOS_ARS = {1: "25000", 3: "14500", 5: "16800", 6: "62000"}
 
-    stocks = [[libro[0], 25] for libro in libros]
-    with open(f"{RUTA_CSV}/stocks.csv", "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["isbn", "cantidad"])
-        writer.writerows(stocks)
+FECHA_INICIAL = datetime.date(2026, 9, 28)
 
-    # Nuevos precios base en dólares (USD = Moneda ID 2)
-    precios = [[libro[0], 2, 35.50] for libro in libros] # Todos cuestan 35.50 USD de base
-    with open(f"{RUTA_CSV}/precios.csv", "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["isbn", "id_moneda", "monto"])
-        writer.writerows(precios)
+# id_tipo -> [(compra, venta)] por día consecutivo desde FECHA_INICIAL (valores ficticios)
+COTIZACIONES = {
+    1: [("1380", "1430"), ("1385", "1435"), ("1390", "1440"), ("1395", "1445")],
+    2: [("1450", "1470"), ("1455", "1475"), ("1460", "1480"), ("1465", "1490")],
+    3: [("1440", "1445"), ("1442", "1448"), ("1447", "1452"), ("1450", "1455")]}
 
-def precargar_datos(repo_libro, repo_genero, repo_editorial, repo_stock, repo_cotizacion, repo_precio):
-    generar_archivos_csv()
 
-    # Cargar entidades base
-    with open(f"{RUTA_CSV}/generos.csv", "r", encoding="utf-8") as f:
-        next(f); [repo_genero.crear(Genero(int(fila[0]), fila[1])) for fila in csv.reader(f)]
-    with open(f"{RUTA_CSV}/editoriales.csv", "r", encoding="utf-8") as f:
-        next(f); [repo_editorial.crear(Editorial(int(fila[0]), fila[1])) for fila in csv.reader(f)]
-    
-    # Cargar libros
-    with open(f"{RUTA_CSV}/libros.csv", "r", encoding="utf-8") as f:
-        next(f)
-        for fila in csv.reader(f):
-            repo_libro.crear(Libro(fila[0], fila[1], fila[2], repo_editorial.leer_por_id(int(fila[3])), repo_genero.leer_por_id(int(fila[4]))))
+def _isbn13(base: str) -> str:
+    """Completa 12 dígitos con el dígito verificador de un ISBN-13."""
+    suma = sum(int(digito) * (1 if posicion % 2 == 0 else 3)
+               for posicion, digito in enumerate(base))
+    return base + str((10 - suma % 10) % 10)
 
-    # Cargar stocks
-    with open(f"{RUTA_CSV}/stocks.csv", "r", encoding="utf-8") as f:
-        next(f)
-        for fila in csv.reader(f):
-            libro = repo_libro.leer_por_id(fila[0])
-            if libro: repo_stock.crear(Stock(libro, int(fila[1])))
 
-    # Cargar cotizaciones
-    tipos = {}
-    with open(f"{RUTA_CSV}/tipos_cotizacion.csv", "r", encoding="utf-8") as f:
-        next(f)
-        tipos = {int(fila[0]): TipoCotizacion(int(fila[0]), fila[1]) for fila in csv.reader(f)}
-    with open(f"{RUTA_CSV}/cotizaciones.csv", "r", encoding="utf-8") as f:
-        next(f)
-        for fila in csv.reader(f):
-            partes = fila[1].split("-")
-            repo_cotizacion.crear(CotizacionDolar(tipos[int(fila[0])], date(int(partes[0]), int(partes[1]), int(partes[2])), float(fila[2])))
+def _tiene_datos(ruta_csv: str) -> bool:
+    """Indica si el archivo de libros ya tiene registros además del encabezado."""
+    ruta = os.path.join(ruta_csv, "libros.csv")
+    if not os.path.exists(ruta):
+        return False
+    with open(ruta, encoding="utf-8") as archivo:
+        return sum(1 for _ in archivo) > 1
 
-    # Cargar Precios
-    moneda_usd = Moneda(2, "USD", "u$s")
-    with open(f"{RUTA_CSV}/precios.csv", "r", encoding="utf-8") as f:
-        next(f)
-        for fila in csv.reader(f):
-            libro = repo_libro.leer_por_id(fila[0])
-            if libro:
-                repo_precio.crear(Precio(libro, moneda_usd, float(fila[2])))
+
+def precargar_datos(ruta_csv: str = RUTA_CSV_DEFECTO, forzar: bool = False) -> bool:
+    """Genera los CSV con datos de ejemplo.
+
+    Args:
+        ruta_csv: carpeta donde se escriben los archivos.
+        forzar: si es True, borra los datos existentes y los vuelve a generar.
+
+    Returns:
+        True si cargó los datos, False si ya existían y no se tocaron.
+    """
+    if _tiene_datos(ruta_csv) and not forzar:
+        return False
+    for nombre in ARCHIVOS:
+        ruta = os.path.join(ruta_csv, nombre)
+        if os.path.exists(ruta):
+            os.remove(ruta)
+
+    repo_genero = RepositorioGenero(os.path.join(ruta_csv, "generos.csv"))
+    repo_editorial = RepositorioEditorial(os.path.join(ruta_csv, "editoriales.csv"))
+    repo_moneda = RepositorioMoneda(os.path.join(ruta_csv, "monedas.csv"))
+    repo_tipo = RepositorioTipoCotizacion(os.path.join(ruta_csv, "tipos_cotizacion.csv"))
+    repo_libro = RepositorioLibro(repo_editorial, repo_genero,
+                                  os.path.join(ruta_csv, "libros.csv"))
+    repo_precio = RepositorioPrecio(repo_libro, repo_moneda,
+                                    os.path.join(ruta_csv, "precios.csv"))
+    repo_stock = RepositorioStock(repo_libro, os.path.join(ruta_csv, "stock.csv"))
+    repo_cotizacion = RepositorioCotizacionDolar(repo_tipo,
+                                                 os.path.join(ruta_csv, "cotizaciones.csv"))
+
+    for id_genero, nombre in enumerate(GENEROS, start=1):
+        repo_genero.crear(Genero(id_genero, nombre))
+    for id_editorial, (nombre, pais) in enumerate(EDITORIALES, start=1):
+        repo_editorial.crear(Editorial(id_editorial, nombre, pais))
+    for id_moneda, (codigo, nombre, simbolo) in enumerate(MONEDAS, start=1):
+        repo_moneda.crear(Moneda(id_moneda, codigo, nombre, simbolo))
+    for id_tipo, nombre in enumerate(TIPOS_COTIZACION, start=1):
+        repo_tipo.crear(TipoCotizacion(id_tipo, nombre))
+
+    ars = repo_moneda.leer_por_id(1)
+    usd = repo_moneda.leer_por_id(2)
+    id_precio = 1
+    for id_libro, (titulo, autor, id_genero, id_editorial, precio_usd, cantidad) in enumerate(
+            LIBROS, start=1):
+        isbn = _isbn13(f"978950{id_libro:06d}")
+        libro = repo_libro.crear(Libro(
+            id_libro, isbn, titulo, autor,
+            repo_editorial.leer_por_id(id_editorial), repo_genero.leer_por_id(id_genero)))
+        repo_precio.crear(Precio(id_precio, libro, usd, precio_usd))
+        id_precio += 1
+        if id_libro in PRECIOS_ARS:
+            repo_precio.crear(Precio(id_precio, libro, ars, PRECIOS_ARS[id_libro]))
+            id_precio += 1
+        repo_stock.crear(Stock(libro, cantidad))
+
+    for id_tipo, valores in COTIZACIONES.items():
+        tipo = repo_tipo.leer_por_id(id_tipo)
+        for dias, (compra, venta) in enumerate(valores):
+            fecha = FECHA_INICIAL + datetime.timedelta(days=dias)
+            repo_cotizacion.crear(CotizacionDolar(tipo, fecha, Decimal(compra), Decimal(venta)))
+    return True

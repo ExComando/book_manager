@@ -1,4 +1,11 @@
 # Changelog
+
+[Corrección post-entrega] - 11/10/2026
+- Servicios para todas las entidades (Género, Editorial, Moneda, TipoCotización, Libro, Precio, Stock, Cotización).
+- Repositorios con persistencia real en CSV y reconstrucción de objetos relacionados.
+- eliminar() recibe objetos en lugar de IDs.
+- Limpieza de __pycache__ y de la carpeta src/src; agregado de .gitignore.
+
 [Correcciones Finales] - 29/09/2026
 - Integración de la entidad Precio y creación de su respectivo RepositorioPrecio para manejar costos base en moneda extranjera.
 - Actualización de los datos CSV con cotizaciones reales y actuales del dólar oficial ($1545) y blue ($1560).

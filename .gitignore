@@ -1,7 +1,17 @@
-# Ignorar archivos compilados de Python
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
 
-# Ignorar entornos virtuales
+# Entornos virtuales
 .venv/
 venv/
+env/
+
+# Editores y sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Colab / Jupyter
+.ipynb_checkpoints/

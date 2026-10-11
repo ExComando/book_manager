@@ -1,0 +1,13 @@
+id,isbn,titulo,autor,editorial_id,genero_id
+1,9789500000017,Rayuela,Julio Cortázar,1,1
+2,9789500000024,El Aleph,Jorge Luis Borges,8,2
+3,9789500000031,Martín Fierro,José Hernández,9,6
+4,9789500000048,Sobre héroes y tumbas,Ernesto Sábato,2,1
+5,9789500000055,El Principito,Antoine de Saint-Exupéry,3,4
+6,9789500000062,Clean Code,Robert C. Martin,10,5
+7,9789500000079,Fundación,Isaac Asimov,4,8
+8,9789500000086,Los siete locos,Roberto Arlt,7,1
+9,9789500000093,Breve historia de los argentinos,Félix Luna,2,7
+10,9789500000109,Las venas abiertas de América Latina,Eduardo Galeano,5,3
+11,9789500000116,Ficciones,Jorge Luis Borges,6,2
+12,9789500000123,El nombre de la rosa,Umberto Eco,10,10
