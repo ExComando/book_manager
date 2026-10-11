@@ -15,3 +15,5 @@ Thumbs.db
 
 # Colab / Jupyter
 .ipynb_checkpoints/
+
+.env.local

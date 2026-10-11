@@ -2,8 +2,17 @@
 
 # Sprint 2
 
+[Ejercicio 02] - 11/10/2026
+
+- Clase ConexionDB (database/connection.py) con SQLAlchemy.
+- Lectura de DATABASE_URL desde .env.local, .env o variable de entorno.
+- Normalización del driver de Postgres (psycopg2) y ocultamiento de la contraseña al mostrar la URL.
+- Dependencias: sqlalchemy, psycopg2-binary y python-dotenv.
+
  [Ejercicio 01] - 11/10/2026 
 - Trabajando sobre la rama sprint 2, partinedo de sprint 1. 
+
+# Sprint 1
 
 [Corrección post-entrega] - 11/10/2026
 - Servicios para todas las entidades (Género, Editorial, Moneda, TipoCotización, Libro, Precio, Stock, Cotización).
