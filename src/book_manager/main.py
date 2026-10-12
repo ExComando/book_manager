@@ -1,30 +1,29 @@
 """Punto de entrada de Book Manager."""
-import os
+from sqlalchemy import text
 
-from book_manager.preload_data.preload_data import precargar_datos
+from book_manager.database.connection import ConexionDB
+from book_manager.migrations.migrations import (
+    CARPETA_CSV_DEFECTO, CARPETA_SQL_DEFECTO, TABLAS, migrar_con_conexion)
+from book_manager.models.models import crear_tablas
 from book_manager.repositories.repositories import (
-    RUTA_CSV_DEFECTO, RepositorioCotizacionDolar, RepositorioEditorial,
-    RepositorioGenero, RepositorioLibro, RepositorioMoneda, RepositorioPrecio,
-    RepositorioStock, RepositorioTipoCotizacion)
+    RepositorioCotizacionDolar, RepositorioEditorial, RepositorioGenero, RepositorioLibro,
+    RepositorioMoneda, RepositorioPrecio, RepositorioStock, RepositorioTipoCotizacion)
 from book_manager.services.services import (
     CotizacionService, DolarApiProveedor, EditorialService, GeneroService,
     LibroService, MonedaService, PrecioService, StockService, TipoCotizacionService)
 from book_manager.ui.console import Consola
 
 
-def crear_consola(ruta_csv: str = RUTA_CSV_DEFECTO) -> Consola:
+def crear_consola(conexion: ConexionDB) -> Consola:
     """Crea repositorios, servicios y consola, y los conecta entre sí."""
-    def ruta(nombre: str) -> str:
-        return os.path.join(ruta_csv, nombre)
-
-    repo_genero = RepositorioGenero(ruta("generos.csv"))
-    repo_editorial = RepositorioEditorial(ruta("editoriales.csv"))
-    repo_moneda = RepositorioMoneda(ruta("monedas.csv"))
-    repo_tipo = RepositorioTipoCotizacion(ruta("tipos_cotizacion.csv"))
-    repo_libro = RepositorioLibro(repo_editorial, repo_genero, ruta("libros.csv"))
-    repo_precio = RepositorioPrecio(repo_libro, repo_moneda, ruta("precios.csv"))
-    repo_stock = RepositorioStock(repo_libro, ruta("stock.csv"))
-    repo_cotizacion = RepositorioCotizacionDolar(repo_tipo, ruta("cotizaciones.csv"))
+    repo_genero = RepositorioGenero(conexion)
+    repo_editorial = RepositorioEditorial(conexion)
+    repo_moneda = RepositorioMoneda(conexion)
+    repo_tipo = RepositorioTipoCotizacion(conexion)
+    repo_libro = RepositorioLibro(conexion)
+    repo_precio = RepositorioPrecio(conexion)
+    repo_stock = RepositorioStock(conexion)
+    repo_cotizacion = RepositorioCotizacionDolar(conexion)
 
     servicio_cotizacion = CotizacionService(repo_cotizacion, DolarApiProveedor())
     return Consola(
@@ -38,19 +37,30 @@ def crear_consola(ruta_csv: str = RUTA_CSV_DEFECTO) -> Consola:
         cotizaciones=servicio_cotizacion)
 
 
+def _base_sin_datos(conexion: ConexionDB) -> bool:
+    """Indica si todas las tablas del sistema están vacías."""
+    with conexion.transaccion() as sesion:
+        return all(sesion.execute(text(f"SELECT COUNT(*) FROM {tabla}")).scalar() == 0
+                   for tabla, _ in TABLAS)
+
+
 def main(import_default_data: bool = False) -> None:
     """Ejecuta el sistema.
 
     Args:
-        import_default_data: si es True, genera los CSV de ejemplo antes de iniciar
-            (no pisa datos existentes).
+        import_default_data: si es True, carga los datos de ejemplo (migración de los CSV
+            a la base) antes de iniciar. Sin importar su valor, si la base está
+            completamente vacía también se cargan, para que el sistema no arranque sin
+            datos. Cargarlos es repetible: no duplica registros.
     """
-    if import_default_data:
-        if precargar_datos():
-            print("Datos de ejemplo cargados.")
-        else:
-            print("Ya existen datos; no se modificaron.")
-    crear_consola().ejecutar()
+    conexion = ConexionDB()
+    try:
+        crear_tablas(conexion.engine)
+        if import_default_data or _base_sin_datos(conexion):
+            migrar_con_conexion(CARPETA_CSV_DEFECTO, CARPETA_SQL_DEFECTO, conexion)
+        crear_consola(conexion).ejecutar()
+    finally:
+        conexion.cerrar()
 
 
 if __name__ == "__main__":

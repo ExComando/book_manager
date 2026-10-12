@@ -2,6 +2,14 @@
 
 # Sprint 2
 
+[Ejercicio 06] 
+
+- Repositorios reescritos para usar la base de datos con SQLAlchemy (repositories.py).
+- Traducción de errores de integridad de la base a ValueError.
+- Métodos leer_por_id y leer_todos en los repositorios de Stock y CotizacionDolar.
+- main.py crea las tablas y carga los datos iniciales si la base está vacía.
+- preload_data.py genera los CSV de origen sin depender de los repositorios.0
+
 [Ejercicio 05]
 - Función migrar_datos() en migrations/migrations.py: lee los CSV del Sprint 1, genera los .sql y puebla la base.
 - Archivos .sql por tabla (migrations/sql) numerados según el orden de dependencias.

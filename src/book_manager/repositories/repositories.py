@@ -1,22 +1,28 @@
-"""Repositorios de persistencia en archivos CSV."""
-import abc
-import csv
-import datetime
-import os
-from decimal import Decimal
-from typing import Dict, Generic, List, Optional, TypeVar
+"""Repositorios de persistencia en base de datos (SQLAlchemy).
 
+Cada repositorio traduce entre las entidades del dominio y los modelos (tablas) de la
+base. Hacia afuera siguen recibiendo y devolviendo entidades con sus objetos
+relacionados, igual que en el Sprint 1: los servicios y la consola no saben que el
+almacenamiento cambió de archivos CSV a una base de datos.
+"""
+import abc
+import datetime
+from typing import Callable, Generic, List, Optional, TypeVar
+
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from book_manager.database.connection import ConexionDB
 from book_manager.entities.entities import (
     CotizacionDolar, Editorial, EntidadBase, Genero, Libro, Moneda,
     Precio, Stock, TipoCotizacion)
-
-# La ruta se calcula a partir de este archivo, así no depende de la carpeta
-# desde la que se ejecute el programa.
-RUTA_CSV_DEFECTO = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "migrations", "csv")
+from book_manager.models.models import (
+    CotizacionDolarModel, EditorialModel, GeneroModel, LibroModel, MonedaModel,
+    PrecioModel, StockModel, TipoCotizacionModel)
 
 T = TypeVar('T', bound=EntidadBase)
+R = TypeVar('R')
 
 
 class IRepositorio(abc.ABC, Generic[T]):
@@ -102,310 +108,347 @@ class IRepositorioCotizacionDolar(abc.ABC):
         pass
 
 
-class _ArchivoCsv:
-    """Lectura y escritura de filas en un archivo CSV con encabezado."""
-
-    CAMPOS: List[str] = []
-
-    def __init__(self, ruta: str) -> None:
-        self._ruta = ruta
-        directorio = os.path.dirname(ruta)
-        if directorio:
-            os.makedirs(directorio, exist_ok=True)
-        if not os.path.exists(ruta):
-            self._escribir_filas([])
-
-    def _leer_filas(self) -> List[Dict[str, str]]:
-        """Devuelve todas las filas del archivo como diccionarios."""
-        with open(self._ruta, newline="", encoding="utf-8") as archivo:
-            return list(csv.DictReader(archivo))
-
-    def _escribir_filas(self, filas: List[Dict[str, str]]) -> None:
-        """Reescribe el archivo completo con el encabezado y las filas dadas."""
-        with open(self._ruta, "w", newline="", encoding="utf-8") as archivo:
-            escritor = csv.DictWriter(archivo, fieldnames=self.CAMPOS)
-            escritor.writeheader()
-            escritor.writerows(filas)
+# ---------------------------------------------------------------- modelo -> entidad
+def _a_genero(modelo: GeneroModel) -> Genero:
+    return Genero(modelo.id, modelo.nombre)
 
 
-class RepositorioCsv(_ArchivoCsv, IRepositorio[T]):
-    """CRUD genérico sobre CSV para entidades con id propio."""
+def _a_editorial(modelo: EditorialModel) -> Editorial:
+    return Editorial(modelo.id, modelo.nombre, modelo.pais)
+
+
+def _a_moneda(modelo: MonedaModel) -> Moneda:
+    return Moneda(modelo.id, modelo.codigo, modelo.nombre, modelo.simbolo)
+
+
+def _a_tipo(modelo: TipoCotizacionModel) -> TipoCotizacion:
+    return TipoCotizacion(modelo.id, modelo.nombre)
+
+
+def _a_libro(modelo: LibroModel) -> Libro:
+    return Libro(modelo.id, modelo.isbn, modelo.titulo, modelo.autor,
+                 _a_editorial(modelo.editorial), _a_genero(modelo.genero))
+
+
+def _a_precio(modelo: PrecioModel) -> Precio:
+    return Precio(modelo.id, _a_libro(modelo.libro), _a_moneda(modelo.moneda), modelo.valor)
+
+
+def _a_stock(modelo: StockModel) -> Stock:
+    return Stock(_a_libro(modelo.libro), modelo.cantidad)
+
+
+def _a_cotizacion(modelo: CotizacionDolarModel) -> CotizacionDolar:
+    return CotizacionDolar(_a_tipo(modelo.tipo), modelo.fecha,
+                           modelo.valor_compra, modelo.valor_venta)
+
+
+# ---------------------------------------------------------------- manejo de errores
+# Códigos de error de PostgreSQL (SQLSTATE) que se traducen a mensajes claros.
+_MENSAJES_ERROR = {
+    "23505": "Ya existe un registro con esos datos (valor duplicado).",
+    "23503": "El registro está relacionado con otros datos (referencia inexistente o en uso).",
+    "23514": "Un valor no cumple las restricciones permitidas (por ejemplo, un monto negativo).",
+}
+
+
+def _traducir_error(error: IntegrityError) -> ValueError:
+    """Convierte un error de integridad de la base en un ValueError con un mensaje claro."""
+    codigo = getattr(error.orig, "pgcode", None)
+    return ValueError(_MENSAJES_ERROR.get(
+        codigo, "La operación viola una restricción de la base de datos."))
+
+
+class _RepositorioBase:
+    """Ejecuta las operaciones de un repositorio dentro de una transacción."""
+
+    def __init__(self, conexion: ConexionDB) -> None:
+        self._conexion = conexion
+
+    def _ejecutar(self, operacion: Callable[[Session], R]) -> R:
+        """Corre la operación en una transacción. Los errores de integridad de la base
+        se informan como ValueError, igual que los demás errores de validación."""
+        try:
+            with self._conexion.transaccion() as sesion:
+                return operacion(sesion)
+        except IntegrityError as error:
+            raise _traducir_error(error) from error
+
+
+class RepositorioDB(_RepositorioBase, IRepositorio[T]):
+    """CRUD genérico sobre la base de datos para entidades con id propio."""
+
+    _MODELO: type
 
     @abc.abstractmethod
-    def _a_fila(self, entidad: T) -> Dict[str, str]:
-        """Convierte una entidad en una fila de CSV."""
+    def _a_entidad(self, modelo) -> T:
+        """Reconstruye la entidad (con sus objetos relacionados) desde un modelo."""
 
     @abc.abstractmethod
-    def _desde_fila(self, fila: Dict[str, str]) -> T:
-        """Reconstruye la entidad (con sus objetos relacionados) desde una fila."""
+    def _a_modelo(self, entidad: T):
+        """Crea un modelo nuevo a partir de una entidad."""
+
+    @abc.abstractmethod
+    def _copiar(self, modelo, entidad: T) -> None:
+        """Copia los datos de la entidad a un modelo existente."""
 
     def siguiente_id(self) -> int:
         """Devuelve el próximo ID libre."""
-        ids = [int(fila["id"]) for fila in self._leer_filas()]
-        return max(ids, default=0) + 1
+        consulta = select(func.coalesce(func.max(self._MODELO.id), 0) + 1)
+        return self._ejecutar(lambda sesion: sesion.scalar(consulta))
 
     def crear(self, entidad: T) -> T:
-        filas = self._leer_filas()
-        if any(int(fila["id"]) == entidad.id for fila in filas):
-            raise ValueError(f"Ya existe una entidad con id {entidad.id}.")
-        filas.append(self._a_fila(entidad))
-        self._escribir_filas(filas)
-        return entidad
+        def operacion(sesion: Session) -> T:
+            if sesion.get(self._MODELO, entidad.id) is not None:
+                raise ValueError(f"Ya existe una entidad con id {entidad.id}.")
+            sesion.add(self._a_modelo(entidad))
+            sesion.flush()
+            return entidad
+        return self._ejecutar(operacion)
 
     def leer_por_id(self, id: int) -> Optional[T]:
-        for fila in self._leer_filas():
-            if int(fila["id"]) == id:
-                return self._desde_fila(fila)
-        return None
+        def operacion(sesion: Session) -> Optional[T]:
+            modelo = sesion.get(self._MODELO, id)
+            return None if modelo is None else self._a_entidad(modelo)
+        return self._ejecutar(operacion)
 
     def leer_todos(self) -> List[T]:
-        return [self._desde_fila(fila) for fila in self._leer_filas()]
+        def operacion(sesion: Session) -> List[T]:
+            modelos = sesion.scalars(select(self._MODELO).order_by(self._MODELO.id)).all()
+            return [self._a_entidad(modelo) for modelo in modelos]
+        return self._ejecutar(operacion)
 
     def actualizar(self, entidad: T) -> T:
-        filas = self._leer_filas()
-        for posicion, fila in enumerate(filas):
-            if int(fila["id"]) == entidad.id:
-                filas[posicion] = self._a_fila(entidad)
-                self._escribir_filas(filas)
-                return entidad
-        raise ValueError(f"No existe una entidad con id {entidad.id}.")
+        def operacion(sesion: Session) -> T:
+            modelo = sesion.get(self._MODELO, entidad.id)
+            if modelo is None:
+                raise ValueError(f"No existe una entidad con id {entidad.id}.")
+            self._copiar(modelo, entidad)
+            sesion.flush()
+            return entidad
+        return self._ejecutar(operacion)
 
     def eliminar(self, id: int) -> bool:
-        filas = self._leer_filas()
-        restantes = [fila for fila in filas if int(fila["id"]) != id]
-        if len(restantes) == len(filas):
-            return False
-        self._escribir_filas(restantes)
-        return True
+        def operacion(sesion: Session) -> bool:
+            modelo = sesion.get(self._MODELO, id)
+            if modelo is None:
+                return False
+            sesion.delete(modelo)
+            sesion.flush()
+            return True
+        return self._ejecutar(operacion)
 
 
-class RepositorioGenero(RepositorioCsv[Genero]):
+class RepositorioGenero(RepositorioDB[Genero]):
     """Persistencia de géneros."""
 
-    CAMPOS = ["id", "nombre"]
+    _MODELO = GeneroModel
 
-    def __init__(self, ruta: str = os.path.join(RUTA_CSV_DEFECTO, "generos.csv")) -> None:
-        super().__init__(ruta)
+    def _a_entidad(self, modelo: GeneroModel) -> Genero:
+        return _a_genero(modelo)
 
-    def _a_fila(self, entidad: Genero) -> Dict[str, str]:
-        return {"id": entidad.id, "nombre": entidad.nombre}
+    def _a_modelo(self, entidad: Genero) -> GeneroModel:
+        return GeneroModel(id=entidad.id, nombre=entidad.nombre)
 
-    def _desde_fila(self, fila: Dict[str, str]) -> Genero:
-        return Genero(int(fila["id"]), fila["nombre"])
+    def _copiar(self, modelo: GeneroModel, entidad: Genero) -> None:
+        modelo.nombre = entidad.nombre
 
 
-class RepositorioEditorial(RepositorioCsv[Editorial]):
+class RepositorioEditorial(RepositorioDB[Editorial]):
     """Persistencia de editoriales."""
 
-    CAMPOS = ["id", "nombre", "pais"]
+    _MODELO = EditorialModel
 
-    def __init__(self, ruta: str = os.path.join(RUTA_CSV_DEFECTO, "editoriales.csv")) -> None:
-        super().__init__(ruta)
+    def _a_entidad(self, modelo: EditorialModel) -> Editorial:
+        return _a_editorial(modelo)
 
-    def _a_fila(self, entidad: Editorial) -> Dict[str, str]:
-        return {"id": entidad.id, "nombre": entidad.nombre, "pais": entidad.pais}
+    def _a_modelo(self, entidad: Editorial) -> EditorialModel:
+        return EditorialModel(id=entidad.id, nombre=entidad.nombre, pais=entidad.pais)
 
-    def _desde_fila(self, fila: Dict[str, str]) -> Editorial:
-        return Editorial(int(fila["id"]), fila["nombre"], fila["pais"])
+    def _copiar(self, modelo: EditorialModel, entidad: Editorial) -> None:
+        modelo.nombre = entidad.nombre
+        modelo.pais = entidad.pais
 
 
-class RepositorioMoneda(RepositorioCsv[Moneda]):
+class RepositorioMoneda(RepositorioDB[Moneda]):
     """Persistencia de monedas."""
 
-    CAMPOS = ["id", "codigo", "nombre", "simbolo"]
+    _MODELO = MonedaModel
 
-    def __init__(self, ruta: str = os.path.join(RUTA_CSV_DEFECTO, "monedas.csv")) -> None:
-        super().__init__(ruta)
+    def _a_entidad(self, modelo: MonedaModel) -> Moneda:
+        return _a_moneda(modelo)
 
-    def _a_fila(self, entidad: Moneda) -> Dict[str, str]:
-        return {"id": entidad.id, "codigo": entidad.codigo,
-                "nombre": entidad.nombre, "simbolo": entidad.simbolo}
+    def _a_modelo(self, entidad: Moneda) -> MonedaModel:
+        return MonedaModel(id=entidad.id, codigo=entidad.codigo, nombre=entidad.nombre,
+                           simbolo=entidad.simbolo)
 
-    def _desde_fila(self, fila: Dict[str, str]) -> Moneda:
-        return Moneda(int(fila["id"]), fila["codigo"], fila["nombre"], fila["simbolo"])
+    def _copiar(self, modelo: MonedaModel, entidad: Moneda) -> None:
+        modelo.codigo = entidad.codigo
+        modelo.nombre = entidad.nombre
+        modelo.simbolo = entidad.simbolo
 
 
-class RepositorioTipoCotizacion(RepositorioCsv[TipoCotizacion]):
+class RepositorioTipoCotizacion(RepositorioDB[TipoCotizacion]):
     """Persistencia de tipos de cotización."""
 
-    CAMPOS = ["id", "nombre"]
+    _MODELO = TipoCotizacionModel
 
-    def __init__(self, ruta: str = os.path.join(RUTA_CSV_DEFECTO, "tipos_cotizacion.csv")) -> None:
-        super().__init__(ruta)
+    def _a_entidad(self, modelo: TipoCotizacionModel) -> TipoCotizacion:
+        return _a_tipo(modelo)
 
-    def _a_fila(self, entidad: TipoCotizacion) -> Dict[str, str]:
-        return {"id": entidad.id, "nombre": entidad.nombre}
+    def _a_modelo(self, entidad: TipoCotizacion) -> TipoCotizacionModel:
+        return TipoCotizacionModel(id=entidad.id, nombre=entidad.nombre)
 
-    def _desde_fila(self, fila: Dict[str, str]) -> TipoCotizacion:
-        return TipoCotizacion(int(fila["id"]), fila["nombre"])
-
-
-class RepositorioLibro(RepositorioCsv[Libro]):
-    """Persistencia de libros. Guarda IDs y reconstruye Editorial y Genero como objetos."""
-
-    CAMPOS = ["id", "isbn", "titulo", "autor", "editorial_id", "genero_id"]
-
-    def __init__(self, repo_editorial: RepositorioEditorial, repo_genero: RepositorioGenero,
-                 ruta: str = os.path.join(RUTA_CSV_DEFECTO, "libros.csv")) -> None:
-        super().__init__(ruta)
-        self._repo_editorial = repo_editorial
-        self._repo_genero = repo_genero
-
-    def _a_fila(self, entidad: Libro) -> Dict[str, str]:
-        return {"id": entidad.id, "isbn": entidad.isbn, "titulo": entidad.titulo,
-                "autor": entidad.autor, "editorial_id": entidad.editorial.id,
-                "genero_id": entidad.genero.id}
-
-    def _desde_fila(self, fila: Dict[str, str]) -> Libro:
-        editorial = self._repo_editorial.leer_por_id(int(fila["editorial_id"]))
-        genero = self._repo_genero.leer_por_id(int(fila["genero_id"]))
-        if editorial is None or genero is None:
-            raise ValueError(f"El libro {fila['id']} referencia una editorial o género inexistente.")
-        return Libro(int(fila["id"]), fila["isbn"], fila["titulo"], fila["autor"],
-                     editorial, genero)
+    def _copiar(self, modelo: TipoCotizacionModel, entidad: TipoCotizacion) -> None:
+        modelo.nombre = entidad.nombre
 
 
-class RepositorioPrecio(RepositorioCsv[Precio]):
+class RepositorioLibro(RepositorioDB[Libro]):
+    """Persistencia de libros. Reconstruye Editorial y Genero como objetos."""
+
+    _MODELO = LibroModel
+
+    def _a_entidad(self, modelo: LibroModel) -> Libro:
+        return _a_libro(modelo)
+
+    def _a_modelo(self, entidad: Libro) -> LibroModel:
+        return LibroModel(id=entidad.id, isbn=entidad.isbn, titulo=entidad.titulo,
+                          autor=entidad.autor, editorial_id=entidad.editorial.id,
+                          genero_id=entidad.genero.id)
+
+    def _copiar(self, modelo: LibroModel, entidad: Libro) -> None:
+        modelo.isbn = entidad.isbn
+        modelo.titulo = entidad.titulo
+        modelo.autor = entidad.autor
+        modelo.editorial_id = entidad.editorial.id
+        modelo.genero_id = entidad.genero.id
+
+
+class RepositorioPrecio(RepositorioDB[Precio]):
     """Persistencia de precios. Reconstruye Libro y Moneda como objetos."""
 
-    CAMPOS = ["id", "libro_id", "moneda_id", "valor"]
+    _MODELO = PrecioModel
 
-    def __init__(self, repo_libro: RepositorioLibro, repo_moneda: RepositorioMoneda,
-                 ruta: str = os.path.join(RUTA_CSV_DEFECTO, "precios.csv")) -> None:
-        super().__init__(ruta)
-        self._repo_libro = repo_libro
-        self._repo_moneda = repo_moneda
+    def _a_entidad(self, modelo: PrecioModel) -> Precio:
+        return _a_precio(modelo)
 
-    def _a_fila(self, entidad: Precio) -> Dict[str, str]:
-        return {"id": entidad.id, "libro_id": entidad.libro.id,
-                "moneda_id": entidad.moneda.id, "valor": str(entidad.valor)}
+    def _a_modelo(self, entidad: Precio) -> PrecioModel:
+        return PrecioModel(id=entidad.id, libro_id=entidad.libro.id,
+                           moneda_id=entidad.moneda.id, valor=entidad.valor)
 
-    def _desde_fila(self, fila: Dict[str, str]) -> Precio:
-        libro = self._repo_libro.leer_por_id(int(fila["libro_id"]))
-        moneda = self._repo_moneda.leer_por_id(int(fila["moneda_id"]))
-        if libro is None or moneda is None:
-            raise ValueError(f"El precio {fila['id']} referencia un libro o moneda inexistente.")
-        return Precio(int(fila["id"]), libro, moneda, Decimal(fila["valor"]))
+    def _copiar(self, modelo: PrecioModel, entidad: Precio) -> None:
+        modelo.libro_id = entidad.libro.id
+        modelo.moneda_id = entidad.moneda.id
+        modelo.valor = entidad.valor
 
 
-class RepositorioStock(_ArchivoCsv, IRepositorioStock):
-    """Persistencia de stock, un registro por libro."""
-
-    CAMPOS = ["libro_id", "cantidad"]
-
-    def __init__(self, repo_libro: RepositorioLibro,
-                 ruta: str = os.path.join(RUTA_CSV_DEFECTO, "stock.csv")) -> None:
-        super().__init__(ruta)
-        self._repo_libro = repo_libro
-
-    def _a_fila(self, stock: Stock) -> Dict[str, str]:
-        return {"libro_id": stock.libro_id, "cantidad": stock.cantidad}
-
-    def _desde_fila(self, fila: Dict[str, str]) -> Stock:
-        libro = self._repo_libro.leer_por_id(int(fila["libro_id"]))
-        if libro is None:
-            raise ValueError(f"El stock referencia el libro inexistente {fila['libro_id']}.")
-        return Stock(libro, int(fila["cantidad"]))
+class RepositorioStock(_RepositorioBase, IRepositorioStock):
+    """Persistencia de stock, un registro por libro (el id del registro es el del libro)."""
 
     def crear(self, stock: Stock) -> Stock:
-        filas = self._leer_filas()
-        if any(int(fila["libro_id"]) == stock.libro_id for fila in filas):
-            raise ValueError(f"Ya existe stock para el libro {stock.libro_id}.")
-        filas.append(self._a_fila(stock))
-        self._escribir_filas(filas)
-        return stock
+        def operacion(sesion: Session) -> Stock:
+            if sesion.get(StockModel, stock.libro_id) is not None:
+                raise ValueError(f"Ya existe stock para el libro {stock.libro_id}.")
+            sesion.add(StockModel(libro_id=stock.libro_id, cantidad=stock.cantidad))
+            sesion.flush()
+            return stock
+        return self._ejecutar(operacion)
 
     def leer_por_libro(self, libro_id: int) -> Optional[Stock]:
-        for fila in self._leer_filas():
-            if int(fila["libro_id"]) == libro_id:
-                return self._desde_fila(fila)
-        return None
+        def operacion(sesion: Session) -> Optional[Stock]:
+            modelo = sesion.get(StockModel, libro_id)
+            return None if modelo is None else _a_stock(modelo)
+        return self._ejecutar(operacion)
+
+    def leer_por_id(self, id: int) -> Optional[Stock]:
+        """Lee un stock por su ID, que coincide con el ID del libro."""
+        return self.leer_por_libro(id)
 
     def leer_todos(self) -> List[Stock]:
-        """Lee todos los registros de stock (ampliación sobre la interfaz)."""
-        return [self._desde_fila(fila) for fila in self._leer_filas()]
+        def operacion(sesion: Session) -> List[Stock]:
+            modelos = sesion.scalars(select(StockModel).order_by(StockModel.libro_id)).all()
+            return [_a_stock(modelo) for modelo in modelos]
+        return self._ejecutar(operacion)
 
     def actualizar(self, stock: Stock) -> Stock:
-        filas = self._leer_filas()
-        for posicion, fila in enumerate(filas):
-            if int(fila["libro_id"]) == stock.libro_id:
-                filas[posicion] = self._a_fila(stock)
-                self._escribir_filas(filas)
-                return stock
-        raise ValueError(f"No existe stock para el libro {stock.libro_id}.")
+        def operacion(sesion: Session) -> Stock:
+            modelo = sesion.get(StockModel, stock.libro_id)
+            if modelo is None:
+                raise ValueError(f"No existe stock para el libro {stock.libro_id}.")
+            modelo.cantidad = stock.cantidad
+            sesion.flush()
+            return stock
+        return self._ejecutar(operacion)
 
     def eliminar(self, libro_id: int) -> bool:
-        filas = self._leer_filas()
-        restantes = [fila for fila in filas if int(fila["libro_id"]) != libro_id]
-        if len(restantes) == len(filas):
-            return False
-        self._escribir_filas(restantes)
-        return True
+        def operacion(sesion: Session) -> bool:
+            modelo = sesion.get(StockModel, libro_id)
+            if modelo is None:
+                return False
+            sesion.delete(modelo)
+            sesion.flush()
+            return True
+        return self._ejecutar(operacion)
 
 
-class RepositorioCotizacionDolar(_ArchivoCsv, IRepositorioCotizacionDolar):
+class RepositorioCotizacionDolar(_RepositorioBase, IRepositorioCotizacionDolar):
     """Persistencia del histórico de cotizaciones, identificadas por tipo y fecha."""
 
-    CAMPOS = ["tipo_id", "fecha", "valor_compra", "valor_venta"]
-
-    def __init__(self, repo_tipo: RepositorioTipoCotizacion,
-                 ruta: str = os.path.join(RUTA_CSV_DEFECTO, "cotizaciones.csv")) -> None:
-        super().__init__(ruta)
-        self._repo_tipo = repo_tipo
-
-    def _a_fila(self, cotizacion: CotizacionDolar) -> Dict[str, str]:
-        return {"tipo_id": cotizacion.tipo_id, "fecha": cotizacion.fecha.isoformat(),
-                "valor_compra": str(cotizacion.valor_compra),
-                "valor_venta": str(cotizacion.valor_venta)}
-
-    def _desde_fila(self, fila: Dict[str, str]) -> CotizacionDolar:
-        tipo = self._repo_tipo.leer_por_id(int(fila["tipo_id"]))
-        if tipo is None:
-            raise ValueError(f"La cotización referencia el tipo inexistente {fila['tipo_id']}.")
-        return CotizacionDolar(tipo, datetime.date.fromisoformat(fila["fecha"]),
-                               Decimal(fila["valor_compra"]), Decimal(fila["valor_venta"]))
-
-    @staticmethod
-    def _coincide(fila: Dict[str, str], tipo_id: int, fecha: datetime.date) -> bool:
-        return int(fila["tipo_id"]) == tipo_id and fila["fecha"] == fecha.isoformat()
-
     def crear(self, cotizacion: CotizacionDolar) -> CotizacionDolar:
-        filas = self._leer_filas()
-        if any(self._coincide(f, cotizacion.tipo_id, cotizacion.fecha) for f in filas):
-            raise ValueError("Ya existe una cotización para ese tipo y fecha.")
-        filas.append(self._a_fila(cotizacion))
-        self._escribir_filas(filas)
-        return cotizacion
+        def operacion(sesion: Session) -> CotizacionDolar:
+            if sesion.get(CotizacionDolarModel,
+                          (cotizacion.tipo_id, cotizacion.fecha)) is not None:
+                raise ValueError("Ya existe una cotización para ese tipo y fecha.")
+            sesion.add(CotizacionDolarModel(
+                tipo_id=cotizacion.tipo_id, fecha=cotizacion.fecha,
+                valor_compra=cotizacion.valor_compra, valor_venta=cotizacion.valor_venta))
+            sesion.flush()
+            return cotizacion
+        return self._ejecutar(operacion)
 
     def leer_por_tipo_y_fecha(
             self, tipo_id: int, fecha: datetime.date) -> Optional[CotizacionDolar]:
-        for fila in self._leer_filas():
-            if self._coincide(fila, tipo_id, fecha):
-                return self._desde_fila(fila)
-        return None
+        def operacion(sesion: Session) -> Optional[CotizacionDolar]:
+            modelo = sesion.get(CotizacionDolarModel, (tipo_id, fecha))
+            return None if modelo is None else _a_cotizacion(modelo)
+        return self._ejecutar(operacion)
+
+    def leer_por_id(self, tipo_id: int, fecha: datetime.date) -> Optional[CotizacionDolar]:
+        """Lee una cotización por su ID, que es compuesto: el tipo y la fecha."""
+        return self.leer_por_tipo_y_fecha(tipo_id, fecha)
 
     def leer_historico_por_tipo(self, tipo_id: int) -> List[CotizacionDolar]:
-        historico = [self._desde_fila(f) for f in self._leer_filas()
-                     if int(f["tipo_id"]) == tipo_id]
-        return sorted(historico, key=lambda cotizacion: cotizacion.fecha)
+        def operacion(sesion: Session) -> List[CotizacionDolar]:
+            consulta = (select(CotizacionDolarModel)
+                        .where(CotizacionDolarModel.tipo_id == tipo_id)
+                        .order_by(CotizacionDolarModel.fecha))
+            return [_a_cotizacion(modelo) for modelo in sesion.scalars(consulta).all()]
+        return self._ejecutar(operacion)
 
     def leer_todos(self) -> List[CotizacionDolar]:
-        """Lee todas las cotizaciones (ampliación sobre la interfaz)."""
-        return [self._desde_fila(fila) for fila in self._leer_filas()]
+        def operacion(sesion: Session) -> List[CotizacionDolar]:
+            consulta = select(CotizacionDolarModel).order_by(
+                CotizacionDolarModel.tipo_id, CotizacionDolarModel.fecha)
+            return [_a_cotizacion(modelo) for modelo in sesion.scalars(consulta).all()]
+        return self._ejecutar(operacion)
 
     def actualizar(self, cotizacion: CotizacionDolar) -> CotizacionDolar:
-        filas = self._leer_filas()
-        for posicion, fila in enumerate(filas):
-            if self._coincide(fila, cotizacion.tipo_id, cotizacion.fecha):
-                filas[posicion] = self._a_fila(cotizacion)
-                self._escribir_filas(filas)
-                return cotizacion
-        raise ValueError("No existe una cotización para ese tipo y fecha.")
+        def operacion(sesion: Session) -> CotizacionDolar:
+            modelo = sesion.get(CotizacionDolarModel, (cotizacion.tipo_id, cotizacion.fecha))
+            if modelo is None:
+                raise ValueError("No existe una cotización para ese tipo y fecha.")
+            modelo.valor_compra = cotizacion.valor_compra
+            modelo.valor_venta = cotizacion.valor_venta
+            sesion.flush()
+            return cotizacion
+        return self._ejecutar(operacion)
 
     def eliminar(self, tipo_id: int, fecha: datetime.date) -> bool:
-        filas = self._leer_filas()
-        restantes = [f for f in filas if not self._coincide(f, tipo_id, fecha)]
-        if len(restantes) == len(filas):
-            return False
-        self._escribir_filas(restantes)
-        return True
+        def operacion(sesion: Session) -> bool:
+            modelo = sesion.get(CotizacionDolarModel, (tipo_id, fecha))
+            if modelo is None:
+                return False
+            sesion.delete(modelo)
+            sesion.flush()
+            return True
+        return self._ejecutar(operacion)

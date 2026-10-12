@@ -1,15 +1,15 @@
-"""Datos de ejemplo del sistema. Genera los CSV en migrations/csv."""
+"""Datos de ejemplo del sistema. Genera los CSV de origen en migrations/csv.
+
+Estos archivos son la fuente de la migración a la base de datos (migrations.py).
+"""
+import csv
 import datetime
 import os
 from decimal import Decimal
-from typing import List
+from typing import Dict, List
 
-from book_manager.entities.entities import (
-    CotizacionDolar, Editorial, Genero, Libro, Moneda, Precio, Stock, TipoCotizacion)
-from book_manager.repositories.repositories import (
-    RUTA_CSV_DEFECTO, RepositorioCotizacionDolar, RepositorioEditorial,
-    RepositorioGenero, RepositorioLibro, RepositorioMoneda, RepositorioPrecio,
-    RepositorioStock, RepositorioTipoCotizacion)
+RUTA_CSV_DEFECTO = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "migrations", "csv")
 
 ARCHIVOS: List[str] = [
     "generos.csv", "editoriales.csv", "monedas.csv", "tipos_cotizacion.csv",
@@ -78,63 +78,63 @@ def _tiene_datos(ruta_csv: str) -> bool:
         return sum(1 for _ in archivo) > 1
 
 
+def _escribir(ruta_csv: str, nombre: str, campos: List[str],
+              filas: List[Dict[str, object]]) -> None:
+    """Escribe un archivo CSV con encabezado."""
+    with open(os.path.join(ruta_csv, nombre), "w", newline="", encoding="utf-8") as archivo:
+        escritor = csv.DictWriter(archivo, fieldnames=campos)
+        escritor.writeheader()
+        escritor.writerows(filas)
+
+
 def precargar_datos(ruta_csv: str = RUTA_CSV_DEFECTO, forzar: bool = False) -> bool:
     """Genera los CSV con datos de ejemplo.
 
     Args:
         ruta_csv: carpeta donde se escriben los archivos.
-        forzar: si es True, borra los datos existentes y los vuelve a generar.
+        forzar: si es True, vuelve a generar los archivos aunque ya existan datos.
 
     Returns:
-        True si cargó los datos, False si ya existían y no se tocaron.
+        True si generó los archivos, False si ya existían y no se tocaron.
     """
     if _tiene_datos(ruta_csv) and not forzar:
         return False
-    for nombre in ARCHIVOS:
-        ruta = os.path.join(ruta_csv, nombre)
-        if os.path.exists(ruta):
-            os.remove(ruta)
+    os.makedirs(ruta_csv, exist_ok=True)
 
-    repo_genero = RepositorioGenero(os.path.join(ruta_csv, "generos.csv"))
-    repo_editorial = RepositorioEditorial(os.path.join(ruta_csv, "editoriales.csv"))
-    repo_moneda = RepositorioMoneda(os.path.join(ruta_csv, "monedas.csv"))
-    repo_tipo = RepositorioTipoCotizacion(os.path.join(ruta_csv, "tipos_cotizacion.csv"))
-    repo_libro = RepositorioLibro(repo_editorial, repo_genero,
-                                  os.path.join(ruta_csv, "libros.csv"))
-    repo_precio = RepositorioPrecio(repo_libro, repo_moneda,
-                                    os.path.join(ruta_csv, "precios.csv"))
-    repo_stock = RepositorioStock(repo_libro, os.path.join(ruta_csv, "stock.csv"))
-    repo_cotizacion = RepositorioCotizacionDolar(repo_tipo,
-                                                 os.path.join(ruta_csv, "cotizaciones.csv"))
+    _escribir(ruta_csv, "generos.csv", ["id", "nombre"],
+              [{"id": i, "nombre": n} for i, n in enumerate(GENEROS, start=1)])
+    _escribir(ruta_csv, "editoriales.csv", ["id", "nombre", "pais"],
+              [{"id": i, "nombre": n, "pais": p}
+               for i, (n, p) in enumerate(EDITORIALES, start=1)])
+    _escribir(ruta_csv, "monedas.csv", ["id", "codigo", "nombre", "simbolo"],
+              [{"id": i, "codigo": c, "nombre": n, "simbolo": s}
+               for i, (c, n, s) in enumerate(MONEDAS, start=1)])
+    _escribir(ruta_csv, "tipos_cotizacion.csv", ["id", "nombre"],
+              [{"id": i, "nombre": n} for i, n in enumerate(TIPOS_COTIZACION, start=1)])
 
-    for id_genero, nombre in enumerate(GENEROS, start=1):
-        repo_genero.crear(Genero(id_genero, nombre))
-    for id_editorial, (nombre, pais) in enumerate(EDITORIALES, start=1):
-        repo_editorial.crear(Editorial(id_editorial, nombre, pais))
-    for id_moneda, (codigo, nombre, simbolo) in enumerate(MONEDAS, start=1):
-        repo_moneda.crear(Moneda(id_moneda, codigo, nombre, simbolo))
-    for id_tipo, nombre in enumerate(TIPOS_COTIZACION, start=1):
-        repo_tipo.crear(TipoCotizacion(id_tipo, nombre))
-
-    ars = repo_moneda.leer_por_id(1)
-    usd = repo_moneda.leer_por_id(2)
-    id_precio = 1
+    libros, precios, stock = [], [], []
     for id_libro, (titulo, autor, id_genero, id_editorial, precio_usd, cantidad) in enumerate(
             LIBROS, start=1):
-        isbn = _isbn13(f"978950{id_libro:06d}")
-        libro = repo_libro.crear(Libro(
-            id_libro, isbn, titulo, autor,
-            repo_editorial.leer_por_id(id_editorial), repo_genero.leer_por_id(id_genero)))
-        repo_precio.crear(Precio(id_precio, libro, usd, precio_usd))
-        id_precio += 1
+        libros.append({"id": id_libro, "isbn": _isbn13(f"978950{id_libro:06d}"),
+                       "titulo": titulo, "autor": autor,
+                       "editorial_id": id_editorial, "genero_id": id_genero})
+        precios.append({"id": len(precios) + 1, "libro_id": id_libro, "moneda_id": 2,
+                        "valor": precio_usd})
         if id_libro in PRECIOS_ARS:
-            repo_precio.crear(Precio(id_precio, libro, ars, PRECIOS_ARS[id_libro]))
-            id_precio += 1
-        repo_stock.crear(Stock(libro, cantidad))
+            precios.append({"id": len(precios) + 1, "libro_id": id_libro, "moneda_id": 1,
+                            "valor": PRECIOS_ARS[id_libro]})
+        stock.append({"libro_id": id_libro, "cantidad": cantidad})
+    _escribir(ruta_csv, "libros.csv",
+              ["id", "isbn", "titulo", "autor", "editorial_id", "genero_id"], libros)
+    _escribir(ruta_csv, "precios.csv", ["id", "libro_id", "moneda_id", "valor"], precios)
+    _escribir(ruta_csv, "stock.csv", ["libro_id", "cantidad"], stock)
 
+    cotizaciones = []
     for id_tipo, valores in COTIZACIONES.items():
-        tipo = repo_tipo.leer_por_id(id_tipo)
         for dias, (compra, venta) in enumerate(valores):
             fecha = FECHA_INICIAL + datetime.timedelta(days=dias)
-            repo_cotizacion.crear(CotizacionDolar(tipo, fecha, Decimal(compra), Decimal(venta)))
+            cotizaciones.append({"tipo_id": id_tipo, "fecha": fecha.isoformat(),
+                                 "valor_compra": Decimal(compra), "valor_venta": Decimal(venta)})
+    _escribir(ruta_csv, "cotizaciones.csv",
+              ["tipo_id", "fecha", "valor_compra", "valor_venta"], cotizaciones)
     return True

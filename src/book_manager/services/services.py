@@ -10,7 +10,7 @@ from book_manager.entities.entities import (
     CotizacionDolar, Editorial, EntidadBase, Genero, Libro, Moneda,
     Precio, Stock, TipoCotizacion)
 from book_manager.repositories.repositories import (
-    RepositorioCotizacionDolar, RepositorioCsv, RepositorioEditorial,
+    RepositorioCotizacionDolar, RepositorioDB, RepositorioEditorial,
     RepositorioGenero, RepositorioLibro, RepositorioMoneda, RepositorioPrecio,
     RepositorioStock, RepositorioTipoCotizacion)
 
@@ -23,7 +23,7 @@ CODIGO_USD = "USD"
 class ServicioBase(Generic[T]):
     """CRUD común a los servicios de entidades con id propio."""
 
-    def __init__(self, repositorio: RepositorioCsv[T]) -> None:
+    def __init__(self, repositorio: RepositorioDB[T]) -> None:
         self._repositorio = repositorio
 
     def listar(self) -> List[T]:
