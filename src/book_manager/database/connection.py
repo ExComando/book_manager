@@ -4,11 +4,26 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator, Optional
 
-from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL, Engine, make_url
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
+
+try:
+    from dotenv import load_dotenv
+except ImportError:  # python-dotenv no está instalado: se usa un lector mínimo equivalente
+    def load_dotenv(ruta) -> bool:
+        """Carga las variables de un archivo .env sin pisar las que ya están definidas."""
+        ruta = Path(ruta)
+        if not ruta.is_file():
+            return False
+        for linea in ruta.read_text(encoding="utf-8").splitlines():
+            linea = linea.strip()
+            if not linea or linea.startswith("#") or "=" not in linea:
+                continue
+            nombre, valor = linea.split("=", 1)
+            os.environ.setdefault(nombre.strip(), valor.strip().strip("\"'"))
+        return True
 
 # Raíz del proyecto: .../book_manager/src/book_manager/database/connection.py -> .../book_manager
 RAIZ_PROYECTO = Path(__file__).resolve().parents[3]
