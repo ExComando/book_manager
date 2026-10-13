@@ -9,8 +9,8 @@ from book_manager.repositories.repositories import (
     RepositorioCotizacionDolar, RepositorioEditorial, RepositorioGenero, RepositorioLibro,
     RepositorioMoneda, RepositorioPrecio, RepositorioStock, RepositorioTipoCotizacion)
 from book_manager.services.services import (
-    CotizacionService, DolarApiProveedor, EditorialService, GeneroService,
-    LibroService, MonedaService, PrecioService, StockService, TipoCotizacionService)
+    DolarApiProveedor, EditorialService, GeneroService, LibroService, MonedaService,
+    PrecioService, ServicioCotizacionDolar, StockService, TipoCotizacionService)
 from book_manager.ui.console import Consola
 
 
@@ -25,7 +25,8 @@ def crear_consola(conexion: ConexionDB) -> Consola:
     repo_stock = RepositorioStock(conexion)
     repo_cotizacion = RepositorioCotizacionDolar(conexion)
 
-    servicio_cotizacion = CotizacionService(repo_cotizacion, DolarApiProveedor())
+    servicio_cotizacion = ServicioCotizacionDolar(
+        repo_cotizacion, repo_tipo, DolarApiProveedor())
     return Consola(
         generos=GeneroService(repo_genero, repo_libro),
         editoriales=EditorialService(repo_editorial, repo_libro),

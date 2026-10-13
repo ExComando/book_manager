@@ -7,8 +7,8 @@ import requests
 
 from book_manager.entities.entities import CotizacionDolar, Libro, Precio, Stock
 from book_manager.services.services import (
-    CotizacionService, EditorialService, GeneroService, LibroService, MonedaService,
-    PrecioService, StockService, TipoCotizacionService)
+    EditorialService, GeneroService, LibroService, MonedaService, PrecioService,
+    ServicioCotizacionDolar, StockService, TipoCotizacionService)
 
 T = TypeVar("T")
 Opcion = Tuple[str, Callable[[], None]]
@@ -104,7 +104,8 @@ def _describir_libro(libro: Libro) -> str:
 
 
 def _describir_precio(precio: Precio) -> str:
-    return f"{precio.libro.titulo}: {precio.moneda.simbolo} {precio.valor:,.2f} ({precio.moneda.codigo})"
+    return (f"{precio.libro.titulo}: {precio.moneda.simbolo} {precio.valor:,.2f} "
+            f"({precio.moneda.codigo})")
 
 
 def _describir_stock(stock: Stock) -> str:
@@ -122,7 +123,7 @@ class Consola:
     def __init__(self, generos: GeneroService, editoriales: EditorialService,
                  monedas: MonedaService, tipos: TipoCotizacionService,
                  libros: LibroService, precios: PrecioService,
-                 stock: StockService, cotizaciones: CotizacionService) -> None:
+                 stock: StockService, cotizaciones: ServicioCotizacionDolar) -> None:
         self._generos = generos
         self._editoriales = editoriales
         self._monedas = monedas
@@ -360,7 +361,7 @@ class Consola:
             ("Alta manual", self._alta_cotizacion),
             ("Modificar", self._modificar_cotizacion),
             ("Baja", self._baja_cotizacion),
-            ("Actualizar desde internet (dolarapi.com)", self._actualizar_cotizacion),
+            ("Obtener cotizaciones por API (dolarapi.com)", self._actualizar_cotizacion),
         ])
 
     def _alta_cotizacion(self) -> None:
@@ -384,8 +385,8 @@ class Consola:
             print("Eliminada.")
 
     def _actualizar_cotizacion(self) -> None:
-        tipo = elegir("Tipos de cotización", self._tipos.listar(), str)
-        print(f"Actualizada: {_describir_cotizacion(self._cotizaciones.actualizar_desde_api(tipo))}")
+        registradas = self._cotizaciones.obtener_cotizaciones()
+        self._listar("Cotizaciones obtenidas de la API", registradas, _describir_cotizacion)
 
     # ------------------------------------------------------------ reportes
     def _menu_reportes(self) -> None:

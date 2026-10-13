@@ -1,11 +1,13 @@
 """Servicios con la lógica de negocio de Book Manager."""
 import abc
 import datetime
-from decimal import ROUND_HALF_UP, Decimal
-from typing import Dict, Generic, List, Optional, TypeVar
+import os
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from typing import Dict, Generic, List, Optional, Tuple, TypeVar
 
 import requests
 
+from book_manager.database.connection import cargar_variables_entorno
 from book_manager.entities.entities import (
     CotizacionDolar, Editorial, EntidadBase, Genero, Libro, Moneda,
     Precio, Stock, TipoCotizacion)
@@ -193,31 +195,55 @@ class IProveedorCotizacion(abc.ABC):
     """Fuente externa de cotizaciones del dólar."""
 
     @abc.abstractmethod
-    def obtener(self, casa: str) -> Dict[str, object]:
-        """Devuelve un diccionario con las claves 'compra' y 'venta'."""
+    def obtener_todas(self) -> List[Dict[str, object]]:
+        """Devuelve todas las cotizaciones disponibles.
+
+        Cada una es un diccionario con las claves 'casa', 'nombre', 'compra', 'venta' y
+        'fechaActualizacion'.
+        """
 
 
 class DolarApiProveedor(IProveedorCotizacion):
-    """Obtiene las cotizaciones en tiempo real desde dolarapi.com."""
+    """Obtiene las cotizaciones en tiempo real desde la API configurada en el .env."""
 
-    URL = "https://dolarapi.com/v1/dolares/{casa}"
+    def __init__(self, url: Optional[str] = None) -> None:
+        """Args:
+            url: dirección de la API. Si no se indica, se lee API_URL del .env.
+        """
+        self._url = url
 
-    def obtener(self, casa: str) -> Dict[str, object]:
-        respuesta = requests.get(self.URL.format(casa=casa), timeout=10)
+    def _direccion(self) -> str:
+        cargar_variables_entorno()
+        url = self._url or os.getenv("API_URL")
+        if not url:
+            raise ValueError("Falta API_URL: definila en el archivo .env.")
+        return url
+
+    def obtener_todas(self) -> List[Dict[str, object]]:
+        respuesta = requests.get(self._direccion(), timeout=10)
         respuesta.raise_for_status()
-        return respuesta.json()
+        datos = respuesta.json()
+        if not isinstance(datos, list):
+            raise ValueError("La API devolvió un formato inesperado.")
+        return datos
 
 
-class CotizacionService:
+class ServicioCotizacionDolar:
     """Lógica de cotizaciones del dólar."""
 
-    # Nombre del tipo (en minúsculas) -> identificador de dolarapi.com
-    CASAS = {"oficial": "oficial", "blue": "blue", "mep": "bolsa",
-             "ccl": "contadoconliqui", "mayorista": "mayorista"}
+    # Identificador que usa la API ("casa") -> nombre del tipo de cotización en el sistema.
+    TIPOS_POR_CASA = {
+        "oficial": "Oficial", "blue": "Blue", "bolsa": "MEP", "contadoconliqui": "CCL",
+        "mayorista": "Mayorista", "tarjeta": "Tarjeta", "cripto": "Cripto"}
+
+    # Argentina no tiene horario de verano: la hora local es siempre UTC-3.
+    _ZONA_ARGENTINA = datetime.timezone(datetime.timedelta(hours=-3))
 
     def __init__(self, repositorio: RepositorioCotizacionDolar,
+                 repo_tipo: RepositorioTipoCotizacion,
                  proveedor: IProveedorCotizacion) -> None:
         self._repositorio = repositorio
+        self._repo_tipo = repo_tipo
         self._proveedor = proveedor
 
     def registrar(self, tipo: TipoCotizacion, fecha: datetime.date,
@@ -244,28 +270,76 @@ class CotizacionService:
         historico = self.historico(tipo)
         return historico[-1] if historico else None
 
-    def actualizar_desde_api(self, tipo: TipoCotizacion) -> CotizacionDolar:
-        """Consulta la cotización actual y la guarda con la fecha de hoy."""
-        casa = self.CASAS.get(tipo.nombre.lower())
-        if casa is None:
-            raise ValueError(f"No hay fuente de cotización para '{tipo.nombre}'.")
-        datos = self._proveedor.obtener(casa)
-        venta = Decimal(str(datos["venta"]))
-        compra = Decimal(str(datos.get("compra") or datos["venta"]))
-        hoy = datetime.date.today()
-        existente = self._repositorio.leer_por_tipo_y_fecha(tipo.id, hoy)
-        if existente is None:
-            return self._repositorio.crear(CotizacionDolar(tipo, hoy, compra, venta))
-        existente.valor_compra = compra
-        existente.valor_venta = venta
-        return self._repositorio.actualizar(existente)
+    @classmethod
+    def _fecha_de(cls, texto: object) -> datetime.date:
+        """Fecha local (Argentina) de la actualización. Si no se puede leer, la de hoy."""
+        try:
+            momento = datetime.datetime.fromisoformat(str(texto).replace("Z", "+00:00"))
+        except ValueError:
+            return datetime.date.today()
+        if momento.tzinfo is None:
+            return momento.date()
+        return momento.astimezone(cls._ZONA_ARGENTINA).date()
+
+    @classmethod
+    def _interpretar(cls, dato: Dict[str, object]) -> Tuple[str, datetime.date, Decimal, Decimal]:
+        """Convierte un elemento de la respuesta en (tipo, fecha, compra, venta).
+
+        Si la API no informa el valor de compra, se toma el de venta.
+        """
+        try:
+            casa = str(dato["casa"]).lower()
+            nombre = cls.TIPOS_POR_CASA.get(casa) or str(dato.get("nombre") or casa)
+            venta = Decimal(str(dato["venta"]))
+            compra = venta if dato.get("compra") is None else Decimal(str(dato["compra"]))
+        except (KeyError, TypeError, InvalidOperation) as error:
+            raise ValueError(
+                f"La API devolvió una cotización con formato inesperado: {dato}") from error
+        if compra < 0 or venta < 0:
+            raise ValueError(f"La API devolvió una cotización con valores negativos: {dato}")
+        return nombre, cls._fecha_de(dato.get("fechaActualizacion")), compra, venta
+
+    def obtener_cotizaciones(self) -> List[CotizacionDolar]:
+        """Busca las cotizaciones del dólar en la API, las descarga y las registra en la base.
+
+        Por cada cotización recibida: si ya hay una para ese tipo y fecha, se actualiza; si
+        no, se crea. Si el tipo de cotización no existe, también se crea. Se puede repetir
+        sin duplicar registros. Los datos se validan todos antes de escribir en la base.
+
+        Returns:
+            Las cotizaciones registradas.
+
+        Raises:
+            requests.RequestException: si falla la conexión con la API.
+            ValueError: si falta API_URL o la respuesta no es válida.
+        """
+        datos = [self._interpretar(dato) for dato in self._proveedor.obtener_todas()]
+        if not datos:
+            raise ValueError("La API no devolvió cotizaciones.")
+        tipos = {tipo.nombre.lower(): tipo for tipo in self._repo_tipo.leer_todos()}
+        registradas = []
+        for nombre, fecha, compra, venta in datos:
+            tipo = tipos.get(nombre.lower())
+            if tipo is None:
+                tipo = self._repo_tipo.crear(
+                    TipoCotizacion(self._repo_tipo.siguiente_id(), nombre))
+                tipos[nombre.lower()] = tipo
+            existente = self._repositorio.leer_por_tipo_y_fecha(tipo.id, fecha)
+            if existente is None:
+                registradas.append(
+                    self._repositorio.crear(CotizacionDolar(tipo, fecha, compra, venta)))
+            else:
+                existente.valor_compra = compra
+                existente.valor_venta = venta
+                registradas.append(self._repositorio.actualizar(existente))
+        return registradas
 
 
 class PrecioService(ServicioBase[Precio]):
     """Lógica de precios y cotización de libros."""
 
     def __init__(self, repositorio: RepositorioPrecio,
-                 servicio_cotizacion: CotizacionService) -> None:
+                 servicio_cotizacion: ServicioCotizacionDolar) -> None:
         super().__init__(repositorio)
         self._servicio_cotizacion = servicio_cotizacion
 

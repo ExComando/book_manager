@@ -2,6 +2,14 @@
 
 # Sprint 2
 
+[Ejercicio 07]
+
+- Servicio ServicioCotizacionDolar (reemplaza a CotizacionService) con la función obtener_cotizaciones().
+- Descarga de las cotizaciones desde la API configurada en API_URL (.env) y registro en la base.
+- Registro repetible: actualiza si ya existe la cotización del tipo y fecha, y crea los tipos que falten.
+- Validación de la respuesta antes de escribir en la base.
+- Actualización de main.py y console.py para usar el nuevo servicio.
+
 [Ejercicio 06] 
 
 - Repositorios reescritos para usar la base de datos con SQLAlchemy (repositories.py).
