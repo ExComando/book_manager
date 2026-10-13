@@ -2,6 +2,13 @@
 
 # Sprint 2
 
+[Ejercicio 08]
+
+- Nuevas opciones en el menú principal: obtener cotizaciones por API, lista de precios bimonetaria y exportación de precios a CSV.
+- Lista bimonetaria: precio en pesos (con la última cotización del dólar elegido) y en otra moneda seleccionada.
+- Exportación a CSV de los precios de todas las monedas (una fila por libro, una columna por moneda).
+- Lógica en PrecioService: lista_bimonetaria, monedas_con_precio y exportar_precios_csv.
+
 [Ejercicio 07]
 
 - Servicio ServicioCotizacionDolar (reemplaza a CotizacionService) con la función obtener_cotizaciones().
@@ -16,7 +23,7 @@
 - Traducción de errores de integridad de la base a ValueError.
 - Métodos leer_por_id y leer_todos en los repositorios de Stock y CotizacionDolar.
 - main.py crea las tablas y carga los datos iniciales si la base está vacía.
-- preload_data.py genera los CSV de origen sin depender de los repositorios.0
+- preload_data.py genera los CSV de origen sin depender de los repositorios.
 
 [Ejercicio 05]
 - Función migrar_datos() en migrations/migrations.py: lee los CSV del Sprint 1, genera los .sql y puebla la base.

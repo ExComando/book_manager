@@ -167,6 +167,9 @@ class Consola:
             ("Stock", self._menu_stock),
             ("Cotizaciones del dólar", self._menu_cotizaciones),
             ("Reportes", self._menu_reportes),
+            ("Obtener las cotizaciones por API", self._actualizar_cotizacion),
+            ("Lista de precios bimonetaria", self._lista_bimonetaria),
+            ("Exportar los precios a CSV", self._exportar_precios),
         ], salir="Salir")
         print("¡Hasta luego!")
 
@@ -387,6 +390,35 @@ class Consola:
     def _actualizar_cotizacion(self) -> None:
         registradas = self._cotizaciones.obtener_cotizaciones()
         self._listar("Cotizaciones obtenidas de la API", registradas, _describir_cotizacion)
+
+    # ------------------------------------------------------------ precios: lista y exportación
+    def _lista_bimonetaria(self) -> None:
+        monedas = self._precios.monedas_con_precio(excluir_codigo="ARS")
+        if not monedas:
+            raise ValueError("No hay precios en otra moneda además de pesos.")
+        if len(monedas) == 1:
+            moneda = monedas[0]
+            print(f"\nOtra moneda: {moneda.nombre} ({moneda.codigo})")
+        else:
+            moneda = elegir("Otra moneda", monedas, lambda m: f"{m} - {m.nombre}")
+        tipo = elegir("Tipo de dólar para calcular los pesos", self._tipos.listar(), str)
+        filas = self._precios.lista_bimonetaria(tipo, moneda)
+        ancho = 42
+        print(f"\n--- Precios en pesos (dólar {tipo.nombre}) y en {moneda.codigo} "
+              f"({len(filas)} libros) ---")
+        print(f"{'Libro':<{ancho}} {'Pesos ($)':>16} {moneda.codigo:>14}")
+        for fila in filas:
+            titulo = fila.libro.titulo
+            titulo = titulo if len(titulo) <= ancho else titulo[:ancho - 3] + "..."
+            pesos = "-" if fila.pesos is None else f"{fila.pesos:,.2f}"
+            otra = "-" if fila.otra_moneda is None else f"{fila.otra_moneda:,.2f}"
+            print(f"{titulo:<{ancho}} {pesos:>16} {otra:>14}")
+
+    def _exportar_precios(self) -> None:
+        nombre = input("Nombre del archivo [precios.csv]: ").strip() or "precios.csv"
+        ruta, cantidad = self._precios.exportar_precios_csv(nombre)
+        print(f"Se exportaron los precios de {cantidad} libros en todas las monedas.")
+        print(f"Archivo: {ruta}")
 
     # ------------------------------------------------------------ reportes
     def _menu_reportes(self) -> None:

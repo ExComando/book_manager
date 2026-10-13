@@ -1,13 +1,14 @@
 """Servicios con la lógica de negocio de Book Manager."""
 import abc
+import csv
 import datetime
 import os
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
-from typing import Dict, Generic, List, Optional, Tuple, TypeVar
+from typing import Dict, Generic, List, NamedTuple, Optional, Tuple, TypeVar
 
 import requests
 
-from book_manager.database.connection import cargar_variables_entorno
+from book_manager.database.connection import RAIZ_PROYECTO, cargar_variables_entorno
 from book_manager.entities.entities import (
     CotizacionDolar, Editorial, EntidadBase, Genero, Libro, Moneda,
     Precio, Stock, TipoCotizacion)
@@ -20,6 +21,15 @@ T = TypeVar('T', bound=EntidadBase)
 
 CODIGO_ARS = "ARS"
 CODIGO_USD = "USD"
+CARPETA_EXPORTACION = os.path.join(RAIZ_PROYECTO, "exportaciones")
+
+
+class FilaBimonetaria(NamedTuple):
+    """Un libro con su precio en pesos y en otra moneda (None si no tiene)."""
+
+    libro: Libro
+    pesos: Optional[Decimal]
+    otra_moneda: Optional[Decimal]
 
 
 class ServicioBase(Generic[T]):
@@ -353,12 +363,12 @@ class PrecioService(ServicioBase[Precio]):
         precio = Precio(self._repositorio.siguiente_id(), libro, moneda, valor)
         return self._repositorio.crear(precio)
 
-    def cotizar_en_pesos(self, libro: Libro, tipo: TipoCotizacion) -> Decimal:
-        """Precio del libro en ARS. Si está en USD lo convierte con la última venta del tipo."""
-        precios = self.precios_de_libro(libro)
+    @staticmethod
+    def _pesos_de(libro: Libro, precios: List[Precio],
+                  cotizacion: Optional[CotizacionDolar], tipo: TipoCotizacion) -> Decimal:
+        """Precio en ARS de un libro a partir de sus precios y de la cotización del dólar."""
         en_usd = next((p for p in precios if p.moneda.codigo == CODIGO_USD), None)
         if en_usd is not None:
-            cotizacion = self._servicio_cotizacion.ultima(tipo)
             if cotizacion is None:
                 raise ValueError(f"No hay cotización registrada para {tipo.nombre}.")
             pesos = en_usd.valor * cotizacion.valor_venta
@@ -367,6 +377,83 @@ class PrecioService(ServicioBase[Precio]):
         if en_ars is not None:
             return en_ars.valor
         raise ValueError(f"El libro '{libro.titulo}' no tiene precio en USD ni en ARS.")
+
+    def cotizar_en_pesos(self, libro: Libro, tipo: TipoCotizacion) -> Decimal:
+        """Precio del libro en ARS. Si está en USD lo convierte con la última venta del tipo."""
+        return self._pesos_de(libro, self.precios_de_libro(libro),
+                              self._servicio_cotizacion.ultima(tipo), tipo)
+
+    def monedas_con_precio(self, excluir_codigo: Optional[str] = None) -> List[Moneda]:
+        """Monedas en las que hay al menos un precio cargado, ordenadas por id."""
+        monedas = {precio.moneda for precio in self._repositorio.leer_todos()}
+        return sorted((m for m in monedas if m.codigo != excluir_codigo), key=lambda m: m.id)
+
+    def lista_bimonetaria(self, tipo: TipoCotizacion, moneda: Moneda) -> List[FilaBimonetaria]:
+        """Lista de precios en pesos y en otra moneda para todos los libros con precio.
+
+        El precio en pesos se calcula con la última cotización del tipo de dólar indicado.
+        El precio en la otra moneda es el que está cargado: no se convierte, porque las
+        cotizaciones disponibles son solo del dólar.
+
+        Raises:
+            ValueError: si hay precios en dólares y no hay cotización registrada del tipo.
+        """
+        precios = self._repositorio.leer_todos()
+        cotizacion = self._servicio_cotizacion.ultima(tipo)
+        if cotizacion is None and any(p.moneda.codigo == CODIGO_USD for p in precios):
+            raise ValueError(f"No hay cotización registrada para {tipo.nombre}. "
+                             "Obtenelas por API o cargalas a mano.")
+        por_libro: Dict[int, List[Precio]] = {}
+        libros: Dict[int, Libro] = {}
+        for precio in precios:
+            por_libro.setdefault(precio.libro.id, []).append(precio)
+            libros[precio.libro.id] = precio.libro
+        filas = []
+        for id_libro in sorted(libros):
+            libro, del_libro = libros[id_libro], por_libro[id_libro]
+            try:
+                pesos: Optional[Decimal] = self._pesos_de(libro, del_libro, cotizacion, tipo)
+            except ValueError:
+                pesos = None
+            otra = next((p.valor for p in del_libro if p.moneda == moneda), None)
+            filas.append(FilaBimonetaria(libro, pesos, otra))
+        return filas
+
+    def exportar_precios_csv(self, nombre_archivo: str = "precios.csv",
+                             carpeta: str = CARPETA_EXPORTACION) -> Tuple[str, int]:
+        """Exporta los precios cargados a un CSV: una fila por libro y una columna por moneda.
+
+        Las columnas de moneda cubren todas las monedas que tienen algún precio; queda
+        vacía la celda de un libro que no tiene precio en esa moneda.
+
+        Returns:
+            La ruta completa del archivo y la cantidad de libros exportados.
+        """
+        nombre = os.path.basename(nombre_archivo.strip())
+        if not nombre:
+            raise ValueError("El nombre del archivo no puede estar vacío.")
+        if not nombre.lower().endswith(".csv"):
+            nombre += ".csv"
+        precios = self._repositorio.leer_todos()
+        if not precios:
+            raise ValueError("No hay precios cargados para exportar.")
+        monedas = sorted({precio.moneda for precio in precios}, key=lambda m: m.id)
+        libros: Dict[int, Libro] = {}
+        valores: Dict[Tuple[int, int], Decimal] = {}
+        for precio in precios:
+            libros[precio.libro.id] = precio.libro
+            valores[(precio.libro.id, precio.moneda.id)] = precio.valor
+        os.makedirs(carpeta, exist_ok=True)
+        ruta = os.path.join(carpeta, nombre)
+        # utf-8 con BOM: así Excel muestra bien los acentos al abrir el archivo.
+        with open(ruta, "w", newline="", encoding="utf-8-sig") as archivo:
+            escritor = csv.writer(archivo)
+            escritor.writerow(["isbn", "titulo", "autor"] + [f"precio_{m.codigo}" for m in monedas])
+            for id_libro in sorted(libros):
+                libro = libros[id_libro]
+                escritor.writerow([libro.isbn, libro.titulo, libro.autor] + [
+                    valores.get((id_libro, m.id), "") for m in monedas])
+        return ruta, len(libros)
 
 
 class StockService:
