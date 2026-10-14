@@ -17,3 +17,4 @@ Thumbs.db
 .ipynb_checkpoints/
 
 .env.local
+exportaciones/
