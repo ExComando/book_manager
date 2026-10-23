@@ -70,7 +70,7 @@ class ServicioBase(Generic[T]):
                 raise ValueError(f"Ya existe '{nombre}'.")
 
 
-class GeneroService(ServicioBase[Genero]):
+class ServicioGenero(ServicioBase[Genero]):
     """Lógica de géneros literarios."""
 
     def __init__(self, repositorio: RepositorioGenero, repo_libro: RepositorioLibro) -> None:
@@ -91,7 +91,7 @@ class GeneroService(ServicioBase[Genero]):
             raise ValueError("No se puede eliminar: hay libros con este género.")
 
 
-class EditorialService(ServicioBase[Editorial]):
+class ServicioEditorial(ServicioBase[Editorial]):
     """Lógica de editoriales."""
 
     def __init__(self, repositorio: RepositorioEditorial, repo_libro: RepositorioLibro) -> None:
@@ -112,7 +112,7 @@ class EditorialService(ServicioBase[Editorial]):
             raise ValueError("No se puede eliminar: hay libros de esta editorial.")
 
 
-class MonedaService(ServicioBase[Moneda]):
+class ServicioMoneda(ServicioBase[Moneda]):
     """Lógica de monedas."""
 
     def __init__(self, repositorio: RepositorioMoneda, repo_precio: RepositorioPrecio) -> None:
@@ -138,7 +138,7 @@ class MonedaService(ServicioBase[Moneda]):
             raise ValueError("No se puede eliminar: hay precios en esta moneda.")
 
 
-class TipoCotizacionService(ServicioBase[TipoCotizacion]):
+class ServicioTipoCotizacion(ServicioBase[TipoCotizacion]):
     """Lógica de tipos de cotización del dólar."""
 
     def __init__(self, repositorio: RepositorioTipoCotizacion,
@@ -160,7 +160,7 @@ class TipoCotizacionService(ServicioBase[TipoCotizacion]):
             raise ValueError("No se puede eliminar: tiene cotizaciones registradas.")
 
 
-class LibroService(ServicioBase[Libro]):
+class ServicioLibro(ServicioBase[Libro]):
     """Lógica de libros."""
 
     def __init__(self, repositorio: RepositorioLibro, repo_precio: RepositorioPrecio,
@@ -345,7 +345,7 @@ class ServicioCotizacionDolar:
         return registradas
 
 
-class PrecioService(ServicioBase[Precio]):
+class ServicioPrecio(ServicioBase[Precio]):
     """Lógica de precios y cotización de libros."""
 
     def __init__(self, repositorio: RepositorioPrecio,
@@ -456,7 +456,7 @@ class PrecioService(ServicioBase[Precio]):
         return ruta, len(libros)
 
 
-class StockService:
+class ServicioStock:
     """Lógica de stock, un registro por libro."""
 
     def __init__(self, repositorio: RepositorioStock) -> None:

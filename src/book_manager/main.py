@@ -9,8 +9,9 @@ from book_manager.repositories.repositories import (
     RepositorioCotizacionDolar, RepositorioEditorial, RepositorioGenero, RepositorioLibro,
     RepositorioMoneda, RepositorioPrecio, RepositorioStock, RepositorioTipoCotizacion)
 from book_manager.services.services import (
-    DolarApiProveedor, EditorialService, GeneroService, LibroService, MonedaService,
-    PrecioService, ServicioCotizacionDolar, StockService, TipoCotizacionService)
+    DolarApiProveedor, ServicioCotizacionDolar, ServicioEditorial, ServicioGenero,
+    ServicioLibro, ServicioMoneda, ServicioPrecio, ServicioStock,
+    ServicioTipoCotizacion)
 from book_manager.ui.console import Consola
 
 
@@ -28,13 +29,13 @@ def crear_consola(conexion: ConexionDB) -> Consola:
     servicio_cotizacion = ServicioCotizacionDolar(
         repo_cotizacion, repo_tipo, DolarApiProveedor())
     return Consola(
-        generos=GeneroService(repo_genero, repo_libro),
-        editoriales=EditorialService(repo_editorial, repo_libro),
-        monedas=MonedaService(repo_moneda, repo_precio),
-        tipos=TipoCotizacionService(repo_tipo, repo_cotizacion),
-        libros=LibroService(repo_libro, repo_precio, repo_stock),
-        precios=PrecioService(repo_precio, servicio_cotizacion),
-        stock=StockService(repo_stock),
+        generos=ServicioGenero(repo_genero, repo_libro),
+        editoriales=ServicioEditorial(repo_editorial, repo_libro),
+        monedas=ServicioMoneda(repo_moneda, repo_precio),
+        tipos=ServicioTipoCotizacion(repo_tipo, repo_cotizacion),
+        libros=ServicioLibro(repo_libro, repo_precio, repo_stock),
+        precios=ServicioPrecio(repo_precio, servicio_cotizacion),
+        stock=ServicioStock(repo_stock),
         cotizaciones=servicio_cotizacion)
 
 

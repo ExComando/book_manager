@@ -7,8 +7,8 @@ import requests
 
 from book_manager.entities.entities import CotizacionDolar, Libro, Precio, Stock
 from book_manager.services.services import (
-    EditorialService, GeneroService, LibroService, MonedaService, PrecioService,
-    ServicioCotizacionDolar, StockService, TipoCotizacionService)
+    ServicioCotizacionDolar, ServicioEditorial, ServicioGenero, ServicioLibro,
+    ServicioMoneda, ServicioPrecio, ServicioStock, ServicioTipoCotizacion)
 
 T = TypeVar("T")
 Opcion = Tuple[str, Callable[[], None]]
@@ -120,10 +120,10 @@ def _describir_cotizacion(cotizacion: CotizacionDolar) -> str:
 class Consola:
     """Menús de consola que operan el CRUD de cada entidad a través de los servicios."""
 
-    def __init__(self, generos: GeneroService, editoriales: EditorialService,
-                 monedas: MonedaService, tipos: TipoCotizacionService,
-                 libros: LibroService, precios: PrecioService,
-                 stock: StockService, cotizaciones: ServicioCotizacionDolar) -> None:
+    def __init__(self, generos: ServicioGenero, editoriales: ServicioEditorial,
+                 monedas: ServicioMoneda, tipos: ServicioTipoCotizacion,
+                 libros: ServicioLibro, precios: ServicioPrecio,
+                 stock: ServicioStock, cotizaciones: ServicioCotizacionDolar) -> None:
         self._generos = generos
         self._editoriales = editoriales
         self._monedas = monedas
