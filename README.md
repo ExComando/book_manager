@@ -1,3 +1,7 @@
+### Sprint 3
+
+En este sprint el sistema obtiene datos de la web: un scraper hecho con Scrapy descarga los precios de la competencia (Cúspide) para los libros del catálogo. Esos precios se comparan con los internos, se generan alertas en CSV y un reporte en Excel, y todas las operaciones del sistema quedan auditadas.
+
 ## Sprint 2
 
 # Book Manager - Sprint 1

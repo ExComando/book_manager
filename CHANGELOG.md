@@ -1,5 +1,14 @@
 # Changelog
 
+# Sprint 3
+
+[Ejercicio 01]
+
+- Rama Sprint_3 creada a partir de Sprint_2.
+- Servicios renombrados a la convención Servicio* (ServicioGenero, ServicioEditorial, ServicioMoneda, ServicioTipoCotizacion, ServicioLibro, ServicioPrecio, ServicioStock).
+- Carpetas scraper/ y reportes/ agregadas a la estructura.
+- README actualizado al Sprint 3.
+
 # Sprint 2
 
 [Ejercicio 08]
