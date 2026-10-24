@@ -1,12 +1,18 @@
 # Changelog
 
+# Sprint 3
+
+[Ejercicio 03]
+
+- Scraper de Cúspide con Scrapy en src/book_manager/scraper: CuspideSpider (busca por título los libros del catálogo y toma los 10 primeros resultados), LibroWebLoader (limpieza de datos) y pipelines de validación y persistencia.
+- Nueva tabla precios_web con su modelo, entidad PrecioWeb y repositorio RepositorioPrecioWeb.
+- runner.py para ejecutar el scraper en un proceso aparte.
+
 [Ejercicio 02]
 
 - Función cargar_datos_desde_sql() en migrations/migrations.py: carga los datos desde un archivo .sql o desde todos los .sql de una carpeta.
 - Ejecución en una única transacción y repetible sin duplicar datos.
 - main.py usa la nueva función para la carga inicial.
-
-# Sprint 3
 
 [Ejercicio 01]
 

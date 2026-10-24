@@ -21,6 +21,11 @@ def _validar_monto(valor, campo: str) -> Decimal:
     return monto
 
 
+def _texto_opcional(valor) -> str:
+    """Devuelve el texto sin espacios sobrantes, o una cadena vacía si no hay dato."""
+    return "" if valor is None else str(valor).strip()
+
+
 class EntidadBase:
     """Clase base de las entidades que se identifican por un ID entero."""
 
@@ -339,3 +344,147 @@ class CotizacionDolar:
     def __str__(self) -> str:
         return (f"{self._tipo} {self._fecha}: compra {self._valor_compra} / "
                 f"venta {self._valor_venta}")
+
+
+class PrecioWeb(EntidadBase):
+    """Precio de un libro publicado en un sitio web, obtenido por el scraper."""
+
+    def __init__(self, id: int, libro: Libro, titulo_web: str, isbn_web: str, url: str,
+                 precio, url_imagen: str, formas_pago: str, descripcion: str,
+                 posicion: int, coincide_isbn: bool,
+                 fecha_extraccion: datetime.datetime) -> None:
+        """Crea el registro validando cada dato."""
+        super().__init__(id)
+        self.libro = libro
+        self.titulo_web = titulo_web
+        self.isbn_web = isbn_web
+        self.url = url
+        self.precio = precio
+        self.url_imagen = url_imagen
+        self.formas_pago = formas_pago
+        self.descripcion = descripcion
+        self.posicion = posicion
+        self.coincide_isbn = coincide_isbn
+        self.fecha_extraccion = fecha_extraccion
+
+    @property
+    def libro(self) -> Libro:
+        """Libro del catálogo por el que se hizo la búsqueda."""
+        return self._libro
+
+    @libro.setter
+    def libro(self, valor: Libro) -> None:
+        """Valida que sea un objeto Libro."""
+        if not isinstance(valor, Libro):
+            raise ValueError("El libro debe ser un objeto Libro.")
+        self._libro = valor
+
+    @property
+    def titulo_web(self) -> str:
+        """Título con el que se publica el libro en la web."""
+        return self._titulo_web
+
+    @titulo_web.setter
+    def titulo_web(self, valor: str) -> None:
+        """Valida que el título no esté vacío."""
+        self._titulo_web = _validar_texto(valor, "El título web")
+
+    @property
+    def isbn_web(self) -> str:
+        """ISBN (solo dígitos) publicado en la web; vacío si no figura."""
+        return self._isbn_web
+
+    @isbn_web.setter
+    def isbn_web(self, valor: str) -> None:
+        """Guarda el ISBN sin espacios; es opcional."""
+        self._isbn_web = _texto_opcional(valor)
+
+    @property
+    def url(self) -> str:
+        """Dirección de la ficha del libro en la web."""
+        return self._url
+
+    @url.setter
+    def url(self, valor: str) -> None:
+        """Valida que la URL no esté vacía."""
+        self._url = _validar_texto(valor, "La URL")
+
+    @property
+    def precio(self) -> Decimal:
+        """Precio publicado en la web (en pesos)."""
+        return self._precio
+
+    @precio.setter
+    def precio(self, valor) -> None:
+        """Valida que el precio sea un monto no negativo."""
+        self._precio = _validar_monto(valor, "El precio web")
+
+    @property
+    def url_imagen(self) -> str:
+        """Dirección de la imagen de la tapa; vacía si no hay."""
+        return self._url_imagen
+
+    @url_imagen.setter
+    def url_imagen(self, valor: str) -> None:
+        """Guarda la URL de la imagen; es opcional."""
+        self._url_imagen = _texto_opcional(valor)
+
+    @property
+    def formas_pago(self) -> str:
+        """Formas de pago informadas por el sitio, separadas por ' | '."""
+        return self._formas_pago
+
+    @formas_pago.setter
+    def formas_pago(self, valor: str) -> None:
+        """Guarda las formas de pago; es opcional."""
+        self._formas_pago = _texto_opcional(valor)
+
+    @property
+    def descripcion(self) -> str:
+        """Descripción detallada del libro (o su ficha técnica si no hay sinopsis)."""
+        return self._descripcion
+
+    @descripcion.setter
+    def descripcion(self, valor: str) -> None:
+        """Guarda la descripción; es opcional."""
+        self._descripcion = _texto_opcional(valor)
+
+    @property
+    def posicion(self) -> int:
+        """Lugar que ocupó en los resultados de la búsqueda (1 a 10)."""
+        return self._posicion
+
+    @posicion.setter
+    def posicion(self, valor: int) -> None:
+        """Valida que sea un entero positivo."""
+        if not isinstance(valor, int) or valor < 1:
+            raise ValueError("La posición debe ser un entero mayor o igual a 1.")
+        self._posicion = valor
+
+    @property
+    def coincide_isbn(self) -> bool:
+        """True si el ISBN de la web es el mismo que el del libro del catálogo."""
+        return self._coincide_isbn
+
+    @coincide_isbn.setter
+    def coincide_isbn(self, valor: bool) -> None:
+        """Valida que sea un booleano."""
+        if not isinstance(valor, bool):
+            raise ValueError("coincide_isbn debe ser verdadero o falso.")
+        self._coincide_isbn = valor
+
+    @property
+    def fecha_extraccion(self) -> datetime.datetime:
+        """Momento en que se ejecutó el scraper; es el mismo para toda una corrida."""
+        return self._fecha_extraccion
+
+    @fecha_extraccion.setter
+    def fecha_extraccion(self, valor: datetime.datetime) -> None:
+        """Valida que sea un objeto datetime."""
+        if not isinstance(valor, datetime.datetime):
+            raise ValueError("La fecha de extracción debe ser un objeto datetime.")
+        self._fecha_extraccion = valor
+
+    def __str__(self) -> str:
+        """Texto con el título web y el precio."""
+        return f"{self._titulo_web}: $ {self._precio:.2f}"

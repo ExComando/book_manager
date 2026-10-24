@@ -16,10 +16,10 @@ from sqlalchemy.orm import Session
 from book_manager.database.connection import ConexionDB
 from book_manager.entities.entities import (
     CotizacionDolar, Editorial, EntidadBase, Genero, Libro, Moneda,
-    Precio, Stock, TipoCotizacion)
+    Precio, PrecioWeb, Stock, TipoCotizacion)
 from book_manager.models.models import (
     CotizacionDolarModel, EditorialModel, GeneroModel, LibroModel, MonedaModel,
-    PrecioModel, StockModel, TipoCotizacionModel)
+    PrecioModel, PrecioWebModel, StockModel, TipoCotizacionModel)
 
 T = TypeVar('T', bound=EntidadBase)
 R = TypeVar('R')
@@ -132,6 +132,14 @@ def _a_libro(modelo: LibroModel) -> Libro:
 
 def _a_precio(modelo: PrecioModel) -> Precio:
     return Precio(modelo.id, _a_libro(modelo.libro), _a_moneda(modelo.moneda), modelo.valor)
+
+
+def _a_precio_web(modelo: PrecioWebModel) -> PrecioWeb:
+    """Reconstruye un PrecioWeb (con su Libro) desde el modelo de la tabla precios_web."""
+    return PrecioWeb(modelo.id, _a_libro(modelo.libro), modelo.titulo_web, modelo.isbn_web,
+                     modelo.url, modelo.precio, modelo.url_imagen, modelo.formas_pago,
+                     modelo.descripcion, modelo.posicion, modelo.coincide_isbn,
+                     modelo.fecha_extraccion)
 
 
 def _a_stock(modelo: StockModel) -> Stock:
@@ -340,6 +348,39 @@ class RepositorioPrecio(RepositorioDB[Precio]):
         modelo.libro_id = entidad.libro.id
         modelo.moneda_id = entidad.moneda.id
         modelo.valor = entidad.valor
+
+
+class RepositorioPrecioWeb(RepositorioDB[PrecioWeb]):
+    """Persistencia de los precios web obtenidos por el scraper. Reconstruye el Libro."""
+
+    _MODELO = PrecioWebModel
+
+    def _a_entidad(self, modelo: PrecioWebModel) -> PrecioWeb:
+        """Convierte el modelo de la tabla en la entidad PrecioWeb."""
+        return _a_precio_web(modelo)
+
+    def _a_modelo(self, entidad: PrecioWeb) -> PrecioWebModel:
+        """Crea un modelo nuevo a partir de la entidad."""
+        return PrecioWebModel(
+            id=entidad.id, libro_id=entidad.libro.id, titulo_web=entidad.titulo_web,
+            isbn_web=entidad.isbn_web, url=entidad.url, precio=entidad.precio,
+            url_imagen=entidad.url_imagen, formas_pago=entidad.formas_pago,
+            descripcion=entidad.descripcion, posicion=entidad.posicion,
+            coincide_isbn=entidad.coincide_isbn, fecha_extraccion=entidad.fecha_extraccion)
+
+    def _copiar(self, modelo: PrecioWebModel, entidad: PrecioWeb) -> None:
+        """Copia los datos de la entidad a un modelo existente."""
+        modelo.libro_id = entidad.libro.id
+        modelo.titulo_web = entidad.titulo_web
+        modelo.isbn_web = entidad.isbn_web
+        modelo.url = entidad.url
+        modelo.precio = entidad.precio
+        modelo.url_imagen = entidad.url_imagen
+        modelo.formas_pago = entidad.formas_pago
+        modelo.descripcion = entidad.descripcion
+        modelo.posicion = entidad.posicion
+        modelo.coincide_isbn = entidad.coincide_isbn
+        modelo.fecha_extraccion = entidad.fecha_extraccion
 
 
 class RepositorioStock(_RepositorioBase, IRepositorioStock):

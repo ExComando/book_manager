@@ -8,8 +8,8 @@ pueden borrar, y al borrar un libro se borran también sus precios y su stock.
 import datetime
 from decimal import Decimal
 
-from sqlalchemy import (CheckConstraint, Date, ForeignKey, Numeric, String,
-                        UniqueConstraint)
+from sqlalchemy import (CheckConstraint, Date, DateTime, ForeignKey, Numeric, String,
+                        Text, UniqueConstraint)
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -93,6 +93,34 @@ class PrecioModel(Base):
 
     libro: Mapped[LibroModel] = relationship(lazy="joined")
     moneda: Mapped[MonedaModel] = relationship(lazy="joined")
+
+    from sqlalchemy import (CheckConstraint, Date, DateTime, ForeignKey, Numeric, String,
+                        Text, UniqueConstraint)
+    
+
+class PrecioWebModel(Base):
+    """Tabla precios_web: precios de un libro publicados en la web, obtenidos por scraping."""
+
+    __tablename__ = "precios_web"
+    __table_args__ = (
+        CheckConstraint("precio >= 0", name="ck_precios_web_precio_no_negativo"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    libro_id: Mapped[int] = mapped_column(
+        ForeignKey("libros.id", ondelete="CASCADE"), index=True)
+    titulo_web: Mapped[str] = mapped_column(String(300))
+    isbn_web: Mapped[str] = mapped_column(String(30))
+    url: Mapped[str] = mapped_column(String(500))
+    precio: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    url_imagen: Mapped[str] = mapped_column(String(500))
+    formas_pago: Mapped[str] = mapped_column(Text)
+    descripcion: Mapped[str] = mapped_column(Text)
+    posicion: Mapped[int]
+    coincide_isbn: Mapped[bool]
+    fecha_extraccion: Mapped[datetime.datetime] = mapped_column(DateTime, index=True)
+
+    libro: Mapped[LibroModel] = relationship(lazy="joined")
 
 
 class StockModel(Base):
