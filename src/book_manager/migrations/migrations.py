@@ -99,20 +99,23 @@ def _sentencias(texto: str) -> List[str]:
             if linea.strip() and not linea.lstrip().startswith("--")]
 
 
-def ejecutar_sqls(carpeta_sqls: str, conexion: ConexionDB) -> int:
-    """Ejecuta los .sql de la carpeta, en orden, dentro de una única transacción.
+def _ejecutar_archivos(archivos: List[str], conexion: ConexionDB) -> int:
+    """Ejecuta los archivos .sql indicados, en orden, dentro de una única transacción.
 
     Si alguna sentencia falla se revierte todo y no queda nada a medias.
+
+    Args:
+        archivos: rutas de los .sql, en el orden en que deben ejecutarse.
+        conexion: conexión a la base de datos de destino.
 
     Returns:
         La cantidad de sentencias ejecutadas.
     """
-    archivos = sorted(nombre for nombre in os.listdir(carpeta_sqls) if nombre.endswith(".sql"))
     total = 0
     with conexion.transaccion() as sesion:
         conexion_sql = sesion.connection()
-        for nombre in archivos:
-            with open(os.path.join(carpeta_sqls, nombre), encoding="utf-8") as archivo:
+        for ruta in archivos:
+            with open(ruta, encoding="utf-8") as archivo:
                 sentencias = _sentencias(archivo.read())
             if not sentencias:
                 continue
@@ -125,6 +128,62 @@ def ejecutar_sqls(carpeta_sqls: str, conexion: ConexionDB) -> int:
                     conexion_sql.exec_driver_sql(sentencia, execution_options=opciones)
             total += len(sentencias)
     return total
+
+
+def ejecutar_sqls(carpeta_sqls: str, conexion: ConexionDB) -> int:
+    """Ejecuta los .sql de la carpeta, en orden, dentro de una única transacción.
+
+    Si alguna sentencia falla se revierte todo y no queda nada a medias.
+
+    Returns:
+        La cantidad de sentencias ejecutadas.
+    """
+    archivos = sorted(os.path.join(carpeta_sqls, nombre) for nombre in os.listdir(carpeta_sqls)
+                      if nombre.endswith(".sql"))
+    return _ejecutar_archivos(archivos, conexion)
+
+
+def _archivos_sql(ruta: str) -> List[str]:
+    """Devuelve los .sql a ejecutar para una ruta que puede ser un archivo o una carpeta.
+
+    Raises:
+        FileNotFoundError: si la ruta no existe o la carpeta no tiene archivos .sql.
+    """
+    if os.path.isfile(ruta):
+        return [ruta]
+    if not os.path.isdir(ruta):
+        raise FileNotFoundError(f"No se encontró la ruta {ruta}.")
+    archivos = sorted(os.path.join(ruta, nombre) for nombre in os.listdir(ruta)
+                      if nombre.endswith(".sql"))
+    if not archivos:
+        raise FileNotFoundError(f"No hay archivos .sql en {ruta}.")
+    return archivos
+
+
+def cargar_datos_desde_sql(ruta: str, conexion: ConexionDB) -> int:
+    """Carga en la base los datos de un archivo .sql o de todos los .sql de una carpeta.
+
+    Crea las tablas que falten y ejecuta los archivos tal como están, sin regenerarlos
+    desde los CSV. Si se indica una carpeta, se ejecutan en orden alfabético, por eso
+    los nombres llevan un número (01_generos.sql, 02_editoriales.sql, ...) que respeta
+    las dependencias entre tablas. Todo ocurre en una única transacción: si algo falla
+    no queda nada a medias. Se puede repetir sin duplicar datos (ON CONFLICT DO NOTHING).
+
+    Args:
+        ruta: archivo .sql, o carpeta con los .sql a ejecutar.
+        conexion: conexión a la base de datos de destino.
+
+    Returns:
+        La cantidad de sentencias ejecutadas.
+
+    Raises:
+        FileNotFoundError: si la ruta no existe o la carpeta no tiene archivos .sql.
+    """
+    archivos = _archivos_sql(ruta)
+    crear_tablas(conexion.engine)
+    sentencias = _ejecutar_archivos(archivos, conexion)
+    print(f"Carga completa: {len(archivos)} archivos SQL, {sentencias} sentencias ejecutadas.")
+    return sentencias
 
 
 def migrar_con_conexion(carpeta_csvs: str, carpeta_sqls: str, conexion: ConexionDB) -> None:

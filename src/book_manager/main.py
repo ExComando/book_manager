@@ -3,7 +3,7 @@ from sqlalchemy import text
 
 from book_manager.database.connection import ConexionDB
 from book_manager.migrations.migrations import (
-    CARPETA_CSV_DEFECTO, CARPETA_SQL_DEFECTO, TABLAS, migrar_con_conexion)
+    CARPETA_SQL_DEFECTO, TABLAS, cargar_datos_desde_sql)
 from book_manager.models.models import crear_tablas
 from book_manager.repositories.repositories import (
     RepositorioCotizacionDolar, RepositorioEditorial, RepositorioGenero, RepositorioLibro,
@@ -50,8 +50,8 @@ def main(import_default_data: bool = False) -> None:
     """Ejecuta el sistema.
 
     Args:
-        import_default_data: si es True, carga los datos de ejemplo (migración de los CSV
-            a la base) antes de iniciar. Sin importar su valor, si la base está
+        import_default_data: si es True, carga los datos de ejemplo (ejecuta los .sql de
+            migrations/sql) antes de iniciar. Sin importar su valor, si la base está
             completamente vacía también se cargan, para que el sistema no arranque sin
             datos. Cargarlos es repetible: no duplica registros.
     """
@@ -59,7 +59,7 @@ def main(import_default_data: bool = False) -> None:
     try:
         crear_tablas(conexion.engine)
         if import_default_data or _base_sin_datos(conexion):
-            migrar_con_conexion(CARPETA_CSV_DEFECTO, CARPETA_SQL_DEFECTO, conexion)
+            cargar_datos_desde_sql(CARPETA_SQL_DEFECTO, conexion)
         crear_consola(conexion).ejecutar()
     finally:
         conexion.cerrar()

@@ -1,5 +1,11 @@
 # Changelog
 
+[Ejercicio 02]
+
+- Función cargar_datos_desde_sql() en migrations/migrations.py: carga los datos desde un archivo .sql o desde todos los .sql de una carpeta.
+- Ejecución en una única transacción y repetible sin duplicar datos.
+- main.py usa la nueva función para la carga inicial.
+
 # Sprint 3
 
 [Ejercicio 01]
