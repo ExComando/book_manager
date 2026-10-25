@@ -586,9 +586,20 @@ class ResultadoAlertas(NamedTuple):
     fecha_extraccion: datetime.datetime
 
 
+class ResultadoReporte(NamedTuple):
+    """Resumen de la generación del reporte en Excel."""
+
+    ruta: str
+    libros: int
+    sin_coincidencia: int
+    fecha_extraccion: datetime.datetime
+
+
 class ServicioScraping:
     """Ejecuta el scraper, compara los precios internos con los de la web y genera alertas."""
 
+    COLUMNAS_REPORTE = ["Libro", "Precio interno", "Precio web", "Diferencia",
+                        "Fecha de extracción"]
     COLUMNAS_ALERTAS = ["libro", "precio_interno", "precio_web", "diferencia",
                         "diferencia_porcentual", "alerta", "titulo_web", "url",
                         "fecha_extraccion"]
@@ -636,6 +647,7 @@ class ServicioScraping:
                   precios_web: List[PrecioWeb]) -> List[FilaComparacion]:
         """Arma la comparación a partir de los precios web de una corrida ya leídos."""
         internos = self._servicio_precio.precios_en_pesos(tipo)
+        momento = precios_web[0].fecha_extraccion if precios_web else None
         por_libro: Dict[int, List[PrecioWeb]] = {}
         for precio_web in precios_web:
             por_libro.setdefault(precio_web.libro.id, []).append(precio_web)
@@ -649,8 +661,22 @@ class ServicioScraping:
                 libro, interno, web, diferencia,
                 "" if elegido is None else elegido.titulo_web,
                 "" if elegido is None else elegido.url,
-                None if elegido is None else elegido.fecha_extraccion))
+                momento))
         return filas
+
+    def _leer_corrida(self, fecha_extraccion: Optional[datetime.datetime]) -> List[PrecioWeb]:
+        """Lee los precios web de una corrida (por defecto la más reciente).
+
+        Raises:
+            ValueError: si no hay precios guardados de esa corrida.
+        """
+        precios_web = self._repo_precio_web.leer_por_extraccion(fecha_extraccion)
+        if not precios_web:
+            if fecha_extraccion is None:
+                raise ValueError("No hay precios web guardados: ejecutá el scraping primero.")
+            raise ValueError("El scraper no guardó precios. Revisá la conexión o si el sitio "
+                             "bloquea las búsquedas.")
+        return precios_web
 
     def generar_alertas(self, diferencia: Decimal, tipo: TipoCotizacion,
                         carpeta: str = CARPETA_EXPORTACION,
@@ -674,12 +700,7 @@ class ServicioScraping:
         umbral = Decimal(str(diferencia))
         if umbral < 0:
             raise ValueError("La diferencia de precios no puede ser negativa.")
-        precios_web = self._repo_precio_web.leer_por_extraccion(fecha_extraccion)
-        if not precios_web:
-            if fecha_extraccion is None:
-                raise ValueError("No hay precios web guardados: ejecutá el scraping primero.")
-            raise ValueError("El scraper no guardó precios. Revisá la conexión o si el sitio "
-                             "bloquea las búsquedas.")
+        precios_web = self._leer_corrida(fecha_extraccion)
         momento = precios_web[0].fecha_extraccion
         filas = self._comparar(tipo, precios_web)
         comparados = [f for f in filas if f.diferencia is not None]
@@ -720,3 +741,86 @@ class ServicioScraping:
         if codigo != 0:
             raise ValueError(f"El scraper terminó con errores (código {codigo}).")
         return self.generar_alertas(diferencia, tipo, carpeta, momento)
+
+    def generar_reporte_excel(self, tipo: TipoCotizacion, carpeta: str = CARPETA_EXPORTACION,
+                              fecha_extraccion: Optional[datetime.datetime] = None
+                              ) -> ResultadoReporte:
+        """Genera el reporte en Excel con el precio interno y el precio web de cada libro.
+
+        Hay una fila por libro del catálogo, con las columnas Libro, Precio interno (en
+        pesos), Precio web, Diferencia (precio web menos precio interno) y Fecha de
+        extracción. Si no hay una publicación que coincida, o el libro no tiene precio
+        interno, las celdas que no se pueden calcular quedan vacías.
+
+        Args:
+            tipo: tipo de dólar para convertir los precios internos en dólares.
+            carpeta: carpeta donde se guarda el archivo.
+            fecha_extraccion: corrida del scraper a usar. Por defecto, la más reciente.
+
+        Raises:
+            ValueError: si no hay precios web guardados, si falta la cotización del dólar
+                o si no está instalada la librería openpyxl.
+        """
+        try:
+            from openpyxl import Workbook
+            from openpyxl.comments import Comment
+            from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+        except ImportError as error:
+            raise ValueError("Falta instalar la librería openpyxl (pip install openpyxl).") \
+                from error
+        precios_web = self._leer_corrida(fecha_extraccion)
+        momento = precios_web[0].fecha_extraccion
+        filas = self._comparar(tipo, precios_web)
+
+        libro_excel = Workbook()
+        hoja = libro_excel.active
+        hoja.title = "Reporte de precios"
+        hoja.append(self.COLUMNAS_REPORTE)
+        for fila in filas:
+            hoja.append([fila.libro.titulo, fila.precio_interno, fila.precio_web,
+                         fila.diferencia, fila.fecha_extraccion])
+
+        formato_pesos = '"$" #,##0.00'
+        formato_diferencia = '"$" #,##0.00;[Red]-"$" #,##0.00'
+        formatos = {2: formato_pesos, 3: formato_pesos, 4: formato_diferencia,
+                    5: "dd/mm/yyyy hh:mm"}
+        borde = Border(bottom=Side(style="thin", color="808080"))
+        for celda in hoja[1]:
+            celda.font = Font(name="Arial", size=10, bold=True)
+            celda.fill = PatternFill("solid", fgColor="D9E1F2")
+            celda.alignment = Alignment(horizontal="center", vertical="center")
+            celda.border = borde
+        for fila_excel in hoja.iter_rows(min_row=2):
+            for celda in fila_excel:
+                celda.font = Font(name="Arial", size=10)
+                if celda.column in formatos:
+                    celda.number_format = formatos[celda.column]
+                    celda.alignment = Alignment(horizontal="right")
+        # Aclaraciones donde las ve quien lee el reporte (comentarios de los encabezados).
+        aclaraciones = {
+            "B1": f"En pesos. Si el libro tiene precio en USD se convirtió con la última "
+                  f"venta del dólar {tipo.nombre}.",
+            "C1": "Precio de la publicación de Cúspide con el mismo título del libro. "
+                  "Vacío si no hay coincidencia.",
+            "D1": "Precio web menos precio interno. Positivo: la web es más cara."}
+        for referencia, texto in aclaraciones.items():
+            comentario = Comment(texto, "Book Manager")
+            comentario.width, comentario.height = 280, 90
+            hoja[referencia].comment = comentario
+        anchos = {"A": min(max((len(f.libro.titulo) for f in filas), default=10) + 2, 60),
+                  "B": 16, "C": 16, "D": 16, "E": 20}
+        for columna, ancho in anchos.items():
+            hoja.column_dimensions[columna].width = max(ancho, 12)
+        hoja.freeze_panes = "A2"
+        hoja.auto_filter.ref = hoja.dimensions
+        # Al imprimir o exportar a PDF: hoja horizontal y las cinco columnas en el ancho.
+        hoja.page_setup.orientation = "landscape"
+        hoja.page_setup.fitToWidth = 1
+        hoja.page_setup.fitToHeight = 0
+        hoja.sheet_properties.pageSetUpPr.fitToPage = True
+
+        os.makedirs(carpeta, exist_ok=True)
+        ruta = os.path.join(carpeta, f"reporte_precios_{momento:%Y%m%d_%H%M%S}.xlsx")
+        libro_excel.save(ruta)
+        sin_coincidencia = sum(1 for f in filas if f.precio_web is None)
+        return ResultadoReporte(ruta, len(filas), sin_coincidencia, momento)

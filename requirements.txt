@@ -3,3 +3,4 @@ sqlalchemy
 psycopg2-binary>=2.9.11
 python-dotenv
 scrapy>=2.19
+openpyxl

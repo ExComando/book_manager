@@ -2,6 +2,12 @@
 
 # Sprint 3
 
+[Ejercicio 05]
+
+- Reporte en Excel (openpyxl) con Libro, Precio interno, Precio web, Diferencia y Fecha de extracción, generado desde la última extracción del scraper.
+- Nueva opción de menú "Generar reporte".
+- Nueva dependencia: openpyxl.
+
 [Ejercicio 04]
 
 - Cada libro se empareja con el resultado de Cúspide que tiene el mismo título (sin contar tildes, artículos ni aclaraciones 

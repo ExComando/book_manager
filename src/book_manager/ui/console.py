@@ -173,6 +173,7 @@ class Consola:
             ("Lista de precios bimonetaria", self._lista_bimonetaria),
             ("Exportar los precios a CSV", self._exportar_precios),
             ("Ejecutar scraping", self._ejecutar_scraping),
+            ("Generar reporte", self._generar_reporte),
         ], salir="Salir")
         print("¡Hasta luego!")
 
@@ -435,6 +436,16 @@ class Consola:
               f"(sin coincidencia en Cúspide: {resultado.sin_coincidencia})")
         print(f"Alertas generadas (diferencia de ${diferencia:,.2f} o más): "
               f"{resultado.alertas}")
+        print(f"Archivo: {resultado.ruta}")
+
+    def _generar_reporte(self) -> None:
+        """Genera el reporte en Excel con los precios de la última extracción."""
+        print("\n--- Generar reporte de precios (Excel) ---")
+        tipo = elegir("Tipo de dólar para calcular los pesos", self._tipos.listar(), str)
+        resultado = self._scraping.generar_reporte_excel(tipo)
+        print(f"\nReporte de {resultado.libros} libros, extracción del "
+              f"{resultado.fecha_extraccion:%d/%m/%Y %H:%M} "
+              f"(sin coincidencia en Cúspide: {resultado.sin_coincidencia}).")
         print(f"Archivo: {resultado.ruta}")
 
     # ------------------------------------------------------------ reportes
