@@ -7,10 +7,12 @@ from book_manager.migrations.migrations import (
 from book_manager.models.models import crear_tablas
 from book_manager.repositories.repositories import (
     RepositorioCotizacionDolar, RepositorioEditorial, RepositorioGenero, RepositorioLibro,
-    RepositorioMoneda, RepositorioPrecio, RepositorioStock, RepositorioTipoCotizacion)
+    RepositorioMoneda, RepositorioPrecio, RepositorioPrecioWeb, RepositorioStock,
+    RepositorioTipoCotizacion)
+from book_manager.scraper.runner import lanzar_scraper
 from book_manager.services.services import (
     DolarApiProveedor, ServicioCotizacionDolar, ServicioEditorial, ServicioGenero,
-    ServicioLibro, ServicioMoneda, ServicioPrecio, ServicioStock,
+    ServicioLibro, ServicioMoneda, ServicioPrecio, ServicioScraping, ServicioStock,
     ServicioTipoCotizacion)
 from book_manager.ui.console import Consola
 
@@ -25,18 +27,23 @@ def crear_consola(conexion: ConexionDB) -> Consola:
     repo_precio = RepositorioPrecio(conexion)
     repo_stock = RepositorioStock(conexion)
     repo_cotizacion = RepositorioCotizacionDolar(conexion)
+    repo_precio_web = RepositorioPrecioWeb(conexion)
 
     servicio_cotizacion = ServicioCotizacionDolar(
         repo_cotizacion, repo_tipo, DolarApiProveedor())
+    servicio_precio = ServicioPrecio(repo_precio, servicio_cotizacion)
+    servicio_scraping = ServicioScraping(
+        repo_libro, repo_precio_web, servicio_precio, lanzar_scraper)
     return Consola(
         generos=ServicioGenero(repo_genero, repo_libro),
         editoriales=ServicioEditorial(repo_editorial, repo_libro),
         monedas=ServicioMoneda(repo_moneda, repo_precio),
         tipos=ServicioTipoCotizacion(repo_tipo, repo_cotizacion),
         libros=ServicioLibro(repo_libro, repo_precio, repo_stock),
-        precios=ServicioPrecio(repo_precio, servicio_cotizacion),
+        precios=servicio_precio,
         stock=ServicioStock(repo_stock),
-        cotizaciones=servicio_cotizacion)
+        cotizaciones=servicio_cotizacion,
+        scraping=servicio_scraping)
 
 
 def _base_sin_datos(conexion: ConexionDB) -> bool:

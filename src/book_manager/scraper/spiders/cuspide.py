@@ -7,10 +7,9 @@ from urllib.parse import urlencode, urlparse
 import scrapy
 from scrapy.http import Response
 
+from book_manager.scraper import URL_BASE
 from book_manager.scraper.items import LibroWebItem
 from book_manager.scraper.loaders import LibroWebLoader, solo_digitos
-
-URL_BASE = "https://cuspide.com"
 
 # Una tarjeta por resultado en la página de búsqueda.
 SELECTOR_TARJETAS = "div.products div.product-small.type-product"
@@ -48,7 +47,10 @@ class CuspideSpider(scrapy.Spider):
         if fecha_extraccion:
             self.fecha_extraccion = datetime.datetime.fromisoformat(fecha_extraccion)
         else:
-            self.fecha_extraccion = datetime.datetime.now().replace(microsecond=0)
+            # Hora argentina (UTC-3), igual que las cotizaciones, aunque corra en otro huso.
+            zona = datetime.timezone(datetime.timedelta(hours=-3))
+            self.fecha_extraccion = datetime.datetime.now(zona).replace(
+                tzinfo=None, microsecond=0)
 
     def _catalogo(self) -> List[Dict[str, Any]]:
         """Devuelve los libros a buscar: los recibidos o, si no hay, los de la base."""

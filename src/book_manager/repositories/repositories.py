@@ -368,6 +368,24 @@ class RepositorioPrecioWeb(RepositorioDB[PrecioWeb]):
             descripcion=entidad.descripcion, posicion=entidad.posicion,
             coincide_isbn=entidad.coincide_isbn, fecha_extraccion=entidad.fecha_extraccion)
 
+    def leer_por_extraccion(self, fecha: Optional[datetime.datetime] = None) -> List[PrecioWeb]:
+        """Devuelve los precios de una corrida del scraper, ordenados por libro y posición.
+
+        Args:
+            fecha: fecha y hora de la corrida. Si no se indica, la más reciente.
+        """
+        def operacion(sesion: Session) -> List[PrecioWeb]:
+            objetivo = fecha
+            if objetivo is None:
+                objetivo = sesion.scalar(select(func.max(PrecioWebModel.fecha_extraccion)))
+            if objetivo is None:
+                return []
+            consulta = (select(PrecioWebModel)
+                        .where(PrecioWebModel.fecha_extraccion == objetivo)
+                        .order_by(PrecioWebModel.libro_id, PrecioWebModel.posicion))
+            return [self._a_entidad(modelo) for modelo in sesion.scalars(consulta).all()]
+        return self._ejecutar(operacion)
+
     def _copiar(self, modelo: PrecioWebModel, entidad: PrecioWeb) -> None:
         """Copia los datos de la entidad a un modelo existente."""
         modelo.libro_id = entidad.libro.id

@@ -3,19 +3,22 @@ import abc
 import csv
 import datetime
 import os
+import re
+import unicodedata
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
-from typing import Dict, Generic, List, NamedTuple, Optional, Tuple, TypeVar
+from typing import (Callable, Dict, Generic, List, NamedTuple, Optional, Sequence, Tuple,
+                    TypeVar)
 
 import requests
 
 from book_manager.database.connection import RAIZ_PROYECTO, cargar_variables_entorno
 from book_manager.entities.entities import (
     CotizacionDolar, Editorial, EntidadBase, Genero, Libro, Moneda,
-    Precio, Stock, TipoCotizacion)
+    Precio, PrecioWeb, Stock, TipoCotizacion)
 from book_manager.repositories.repositories import (
     RepositorioCotizacionDolar, RepositorioDB, RepositorioEditorial,
     RepositorioGenero, RepositorioLibro, RepositorioMoneda, RepositorioPrecio,
-    RepositorioStock, RepositorioTipoCotizacion)
+    RepositorioPrecioWeb, RepositorioStock, RepositorioTipoCotizacion)
 
 T = TypeVar('T', bound=EntidadBase)
 
@@ -383,6 +386,34 @@ class ServicioPrecio(ServicioBase[Precio]):
         return self._pesos_de(libro, self.precios_de_libro(libro),
                               self._servicio_cotizacion.ultima(tipo), tipo)
 
+    def precios_en_pesos(self, tipo: TipoCotizacion) -> Dict[int, Decimal]:
+        """Precio en pesos de cada libro que tiene precio, indexado por el id del libro.
+
+        Usa la misma conversión que la lista bimonetaria: si el libro tiene precio en USD
+        se convierte con la última venta del tipo de dólar, y si no, se usa el de ARS. Los
+        libros sin precio en USD ni ARS no aparecen en el resultado.
+
+        Raises:
+            ValueError: si hay precios en dólares y no hay cotización registrada del tipo.
+        """
+        precios = self._repositorio.leer_todos()
+        cotizacion = self._servicio_cotizacion.ultima(tipo)
+        if cotizacion is None and any(p.moneda.codigo == CODIGO_USD for p in precios):
+            raise ValueError(f"No hay cotización registrada para {tipo.nombre}. "
+                             "Obtenelas por API o cargalas a mano.")
+        por_libro: Dict[int, List[Precio]] = {}
+        libros: Dict[int, Libro] = {}
+        for precio in precios:
+            por_libro.setdefault(precio.libro.id, []).append(precio)
+            libros[precio.libro.id] = precio.libro
+        resultado: Dict[int, Decimal] = {}
+        for id_libro, libro in libros.items():
+            try:
+                resultado[id_libro] = self._pesos_de(libro, por_libro[id_libro], cotizacion, tipo)
+            except ValueError:
+                continue
+        return resultado
+
     def monedas_con_precio(self, excluir_codigo: Optional[str] = None) -> List[Moneda]:
         """Monedas en las que hay al menos un precio cargado, ordenadas por id."""
         monedas = {precio.moneda for precio in self._repositorio.leer_todos()}
@@ -491,3 +522,201 @@ class ServicioStock:
     def con_stock_bajo(self, umbral: int = 5) -> List[Stock]:
         """Libros con una cantidad menor o igual al umbral."""
         return [stock for stock in self._repositorio.leer_todos() if stock.cantidad <= umbral]
+
+
+# ---------------------------------------------------------------- scraping y alertas
+# Palabras que no ayudan a reconocer un título ("El Aleph" también se publica como "Aleph").
+PALABRAS_VACIAS = frozenset({"el", "la", "los", "las", "un", "una", "unos", "unas", "de",
+                             "del", "al", "y", "e", "en", "a", "o", "u"})
+
+
+def _palabras(texto: str) -> List[str]:
+    """Pasa un texto a minúsculas, sin tildes ni signos, y lo separa en palabras."""
+    sin_tildes = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode()
+    return re.findall(r"[a-z0-9]+", sin_tildes.lower())
+
+
+def _significativas(titulo: str) -> frozenset:
+    """Palabras que identifican un título: sin tildes, mayúsculas, artículos ni aclaraciones.
+
+    Lo que va entre paréntesis o corchetes (edición, tipo de tapa, etc.) no cuenta.
+    """
+    palabras = frozenset(_palabras(re.sub(r"[(\[][^)\]]*[)\]]", " ", titulo)))
+    return frozenset(palabra for palabra in palabras if palabra not in PALABRAS_VACIAS) or palabras
+
+
+def elegir_coincidencia(libro: Libro, candidatos: Sequence[PrecioWeb]) -> Optional[PrecioWeb]:
+    """Elige, entre los resultados de la búsqueda, la publicación que corresponde al libro.
+
+    El título de la publicación tiene que ser el mismo que el del libro: se ignoran las
+    tildes, las mayúsculas, los artículos y preposiciones, y lo que va entre paréntesis
+    (por ejemplo "(TAPA DURA)"). Un título con palabras de más, como "FICCIONES CON CIENCIA"
+    para el libro "Ficciones", es otra obra y no cuenta. Si hay varias ediciones que
+    cumplen, se elige la que el sitio mostró primero. No se usa el ISBN porque cambia
+    con cada edición.
+
+    Returns:
+        La publicación elegida, o None si ninguna coincide.
+    """
+    buscadas = _significativas(libro.titulo)
+    validos = [candidato for candidato in candidatos
+               if _significativas(candidato.titulo_web) == buscadas]
+    return min(validos, key=lambda candidato: candidato.posicion) if validos else None
+
+
+class FilaComparacion(NamedTuple):
+    """Un libro con su precio interno y el de la publicación web elegida (None si falta)."""
+
+    libro: Libro
+    precio_interno: Optional[Decimal]
+    precio_web: Optional[Decimal]
+    diferencia: Optional[Decimal]
+    titulo_web: str
+    url: str
+    fecha_extraccion: Optional[datetime.datetime]
+
+
+class ResultadoAlertas(NamedTuple):
+    """Resumen de una generación de alertas."""
+
+    ruta: str
+    comparados: int
+    sin_coincidencia: int
+    alertas: int
+    fecha_extraccion: datetime.datetime
+
+
+class ServicioScraping:
+    """Ejecuta el scraper, compara los precios internos con los de la web y genera alertas."""
+
+    COLUMNAS_ALERTAS = ["libro", "precio_interno", "precio_web", "diferencia",
+                        "diferencia_porcentual", "alerta", "titulo_web", "url",
+                        "fecha_extraccion"]
+
+    def __init__(self, repo_libro: RepositorioLibro, repo_precio_web: RepositorioPrecioWeb,
+                 servicio_precio: ServicioPrecio, lanzador: Callable[..., int]) -> None:
+        """Guarda las dependencias.
+
+        Args:
+            repo_libro: repositorio del catálogo.
+            repo_precio_web: repositorio de los precios obtenidos por el scraper.
+            servicio_precio: calcula el precio interno en pesos.
+            lanzador: función que corre el scraper y devuelve su código de salida
+                (0 si terminó bien). Recibe fecha_extraccion como argumento con nombre.
+        """
+        self._repo_libro = repo_libro
+        self._repo_precio_web = repo_precio_web
+        self._servicio_precio = servicio_precio
+        self._lanzador = lanzador
+
+    @staticmethod
+    def _ahora() -> datetime.datetime:
+        """Fecha y hora actuales en Argentina (UTC-3), sin segundos fraccionarios."""
+        zona = ServicioCotizacionDolar._ZONA_ARGENTINA
+        return datetime.datetime.now(zona).replace(tzinfo=None, microsecond=0)
+
+    def comparar(self, tipo: TipoCotizacion,
+                 fecha_extraccion: Optional[datetime.datetime] = None) -> List[FilaComparacion]:
+        """Compara el precio interno (en pesos) de cada libro con el de su publicación web.
+
+        Args:
+            tipo: tipo de dólar para convertir los precios en dólares.
+            fecha_extraccion: corrida del scraper a usar. Por defecto, la más reciente.
+
+        Returns:
+            Una fila por libro del catálogo, ordenadas por id. Si el libro no tiene precio
+            interno o no hay una publicación que coincida, esos campos quedan en None.
+
+        Raises:
+            ValueError: si hay precios en dólares y no hay cotización del tipo indicado.
+        """
+        return self._comparar(tipo, self._repo_precio_web.leer_por_extraccion(fecha_extraccion))
+
+    def _comparar(self, tipo: TipoCotizacion,
+                  precios_web: List[PrecioWeb]) -> List[FilaComparacion]:
+        """Arma la comparación a partir de los precios web de una corrida ya leídos."""
+        internos = self._servicio_precio.precios_en_pesos(tipo)
+        por_libro: Dict[int, List[PrecioWeb]] = {}
+        for precio_web in precios_web:
+            por_libro.setdefault(precio_web.libro.id, []).append(precio_web)
+        filas = []
+        for libro in self._repo_libro.leer_todos():
+            elegido = elegir_coincidencia(libro, por_libro.get(libro.id, []))
+            interno = internos.get(libro.id)
+            web = None if elegido is None else elegido.precio
+            diferencia = None if interno is None or web is None else web - interno
+            filas.append(FilaComparacion(
+                libro, interno, web, diferencia,
+                "" if elegido is None else elegido.titulo_web,
+                "" if elegido is None else elegido.url,
+                None if elegido is None else elegido.fecha_extraccion))
+        return filas
+
+    def generar_alertas(self, diferencia: Decimal, tipo: TipoCotizacion,
+                        carpeta: str = CARPETA_EXPORTACION,
+                        fecha_extraccion: Optional[datetime.datetime] = None
+                        ) -> ResultadoAlertas:
+        """Genera el CSV de alertas: los libros cuya diferencia de precio llega al umbral.
+
+        El archivo se crea siempre, aunque no haya alertas (queda solo con los títulos de
+        las columnas). La diferencia es precio web menos precio interno, en pesos.
+
+        Args:
+            diferencia: diferencia mínima (en pesos, sin signo) que dispara una alerta.
+            tipo: tipo de dólar para convertir los precios internos en dólares.
+            carpeta: carpeta donde se guarda el archivo.
+            fecha_extraccion: corrida del scraper a usar. Por defecto, la más reciente.
+
+        Raises:
+            ValueError: si la diferencia es negativa, si no hay precios web de esa corrida
+                o si falta la cotización del dólar.
+        """
+        umbral = Decimal(str(diferencia))
+        if umbral < 0:
+            raise ValueError("La diferencia de precios no puede ser negativa.")
+        precios_web = self._repo_precio_web.leer_por_extraccion(fecha_extraccion)
+        if not precios_web:
+            if fecha_extraccion is None:
+                raise ValueError("No hay precios web guardados: ejecutá el scraping primero.")
+            raise ValueError("El scraper no guardó precios. Revisá la conexión o si el sitio "
+                             "bloquea las búsquedas.")
+        momento = precios_web[0].fecha_extraccion
+        filas = self._comparar(tipo, precios_web)
+        comparados = [f for f in filas if f.diferencia is not None]
+        alertas = [f for f in comparados if abs(f.diferencia) >= umbral]
+        os.makedirs(carpeta, exist_ok=True)
+        ruta = os.path.join(carpeta, f"alertas_{momento:%Y%m%d_%H%M%S}.csv")
+        # utf-8 con BOM: así Excel muestra bien los acentos al abrir el archivo.
+        with open(ruta, "w", newline="", encoding="utf-8-sig") as archivo:
+            escritor = csv.writer(archivo)
+            escritor.writerow(self.COLUMNAS_ALERTAS)
+            for fila in alertas:
+                porcentual = (fila.diferencia / fila.precio_interno * 100).quantize(
+                    Decimal("0.01"), rounding=ROUND_HALF_UP) if fila.precio_interno else ""
+                escritor.writerow([
+                    fila.libro.titulo, fila.precio_interno, fila.precio_web,
+                    fila.diferencia, porcentual,
+                    "web más caro" if fila.diferencia > 0 else "web más barato",
+                    fila.titulo_web, fila.url, f"{fila.fecha_extraccion:%Y-%m-%d %H:%M:%S}"])
+        sin_coincidencia = sum(1 for f in filas if f.precio_web is None)
+        return ResultadoAlertas(ruta, len(comparados), sin_coincidencia, len(alertas), momento)
+
+    def ejecutar(self, diferencia: Decimal, tipo: TipoCotizacion,
+                 carpeta: str = CARPETA_EXPORTACION) -> ResultadoAlertas:
+        """Corre el scraper y, al terminar, genera el archivo de alertas de esa corrida.
+
+        Las validaciones (umbral y cotización del dólar) se hacen antes de iniciar el
+        scraping, para no esperar varios minutos y fallar al final.
+
+        Raises:
+            ValueError: si los datos no son válidos, si el scraper termina con errores o
+                si no guarda ningún precio.
+        """
+        if Decimal(str(diferencia)) < 0:
+            raise ValueError("La diferencia de precios no puede ser negativa.")
+        self._servicio_precio.precios_en_pesos(tipo)
+        momento = self._ahora()
+        codigo = self._lanzador(fecha_extraccion=momento.isoformat())
+        if codigo != 0:
+            raise ValueError(f"El scraper terminó con errores (código {codigo}).")
+        return self.generar_alertas(diferencia, tipo, carpeta, momento)

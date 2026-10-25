@@ -2,6 +2,11 @@
 
 # Sprint 3
 
+[Ejercicio 04]
+
+- Cada libro se empareja con el resultado de Cúspide que tiene el mismo título (sin contar tildes, artículos ni aclaraciones 
+entre paréntesis). No se usa el ISBN, que cambia según la edición.
+
 [Ejercicio 03]
 
 - Scraper de Cúspide con Scrapy en src/book_manager/scraper: CuspideSpider (busca por título los libros del catálogo y toma los 10 primeros resultados), LibroWebLoader (limpieza de datos) y pipelines de validación y persistencia.

@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from book_manager.scraper.spiders.cuspide import URL_BASE
+from book_manager.scraper import URL_BASE
 
 # Carpeta src, para que el proceso hijo encuentre el paquete book_manager.
 CARPETA_SRC = Path(__file__).resolve().parents[2]

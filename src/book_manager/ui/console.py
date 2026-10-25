@@ -8,7 +8,7 @@ import requests
 from book_manager.entities.entities import CotizacionDolar, Libro, Precio, Stock
 from book_manager.services.services import (
     ServicioCotizacionDolar, ServicioEditorial, ServicioGenero, ServicioLibro,
-    ServicioMoneda, ServicioPrecio, ServicioStock, ServicioTipoCotizacion)
+    ServicioMoneda, ServicioPrecio, ServicioScraping, ServicioStock, ServicioTipoCotizacion)
 
 T = TypeVar("T")
 Opcion = Tuple[str, Callable[[], None]]
@@ -123,7 +123,8 @@ class Consola:
     def __init__(self, generos: ServicioGenero, editoriales: ServicioEditorial,
                  monedas: ServicioMoneda, tipos: ServicioTipoCotizacion,
                  libros: ServicioLibro, precios: ServicioPrecio,
-                 stock: ServicioStock, cotizaciones: ServicioCotizacionDolar) -> None:
+                 stock: ServicioStock, cotizaciones: ServicioCotizacionDolar,
+                 scraping: ServicioScraping) -> None:
         self._generos = generos
         self._editoriales = editoriales
         self._monedas = monedas
@@ -132,6 +133,7 @@ class Consola:
         self._precios = precios
         self._stock = stock
         self._cotizaciones = cotizaciones
+        self._scraping = scraping
 
     # ------------------------------------------------------------ menús
     @staticmethod
@@ -170,6 +172,7 @@ class Consola:
             ("Obtener las cotizaciones por API", self._actualizar_cotizacion),
             ("Lista de precios bimonetaria", self._lista_bimonetaria),
             ("Exportar los precios a CSV", self._exportar_precios),
+            ("Ejecutar scraping", self._ejecutar_scraping),
         ], salir="Salir")
         print("¡Hasta luego!")
 
@@ -419,6 +422,20 @@ class Consola:
         ruta, cantidad = self._precios.exportar_precios_csv(nombre)
         print(f"Se exportaron los precios de {cantidad} libros en todas las monedas.")
         print(f"Archivo: {ruta}")
+
+    # ------------------------------------------------------------ scraping y alertas
+    def _ejecutar_scraping(self) -> None:
+        """Pide la diferencia de precios, ejecuta el scraper y genera el CSV de alertas."""
+        print("\n--- Ejecutar scraping de Cúspide ---")
+        diferencia = pedir_decimal("Diferencia de precios (en pesos) que dispara una alerta")
+        tipo = elegir("Tipo de dólar para calcular los pesos", self._tipos.listar(), str)
+        print("\nEjecutando el scraper (puede tardar unos minutos)...")
+        resultado = self._scraping.ejecutar(diferencia, tipo)
+        print(f"\nLibros comparados: {resultado.comparados} "
+              f"(sin coincidencia en Cúspide: {resultado.sin_coincidencia})")
+        print(f"Alertas generadas (diferencia de ${diferencia:,.2f} o más): "
+              f"{resultado.alertas}")
+        print(f"Archivo: {resultado.ruta}")
 
     # ------------------------------------------------------------ reportes
     def _menu_reportes(self) -> None:
