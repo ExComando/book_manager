@@ -2,6 +2,11 @@
 
 # Sprint 3
 
+[Ejercicio 07]
+
+- Opciones de menú "Ejecutar scraping" (13), "Generar reporte" (14) y "Ver historial de auditoría" (15). Se fueron agregando junto con los ejercicios que las usan (04, 05 y 06).
+- El historial de auditoría muestra las últimas 100 operaciones.
+
 [Ejercicio 06]
 
 - Decorador @auditar que registra en la tabla auditoria (acción, fecha, detalles) cada operación del sistema, incluidos los errores; las operaciones anidadas se registran una sola vez.

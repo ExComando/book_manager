@@ -13,7 +13,7 @@ from book_manager.services.services import (
 
 T = TypeVar("T")
 Opcion = Tuple[str, Callable[[], None]]
-LIMITE_HISTORIAL = 30  # cuántas operaciones muestra "Ver historial de auditoría"
+LIMITE_HISTORIAL = 100   # cuántas operaciones muestra "Ver historial de auditoría
 
 
 # ---------------------------------------------------------------- entrada de datos
