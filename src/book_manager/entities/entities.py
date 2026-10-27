@@ -488,3 +488,50 @@ class PrecioWeb(EntidadBase):
     def __str__(self) -> str:
         """Texto con el título web y el precio."""
         return f"{self._titulo_web}: $ {self._precio:.2f}"
+
+
+class Auditoria(EntidadBase):
+    """Registro de una operación realizada en el sistema."""
+
+    def __init__(self, id: int, accion: str, fecha: datetime.datetime, detalles: str) -> None:
+        """Crea el registro validando cada dato."""
+        super().__init__(id)
+        self.accion = accion
+        self.fecha = fecha
+        self.detalles = detalles
+
+    @property
+    def accion(self) -> str:
+        """Qué operación se realizó (por ejemplo, "Crear libro")."""
+        return self._accion
+
+    @accion.setter
+    def accion(self, valor: str) -> None:
+        """Valida que la acción no esté vacía."""
+        self._accion = _validar_texto(valor, "La acción")
+
+    @property
+    def fecha(self) -> datetime.datetime:
+        """Momento en que se realizó la operación."""
+        return self._fecha
+
+    @fecha.setter
+    def fecha(self, valor: datetime.datetime) -> None:
+        """Valida que sea un objeto datetime."""
+        if not isinstance(valor, datetime.datetime):
+            raise ValueError("La fecha debe ser un objeto datetime.")
+        self._fecha = valor
+
+    @property
+    def detalles(self) -> str:
+        """Datos de la operación y su resultado; vacío si no hay detalles."""
+        return self._detalles
+
+    @detalles.setter
+    def detalles(self, valor: str) -> None:
+        """Guarda los detalles; son opcionales."""
+        self._detalles = _texto_opcional(valor)
+
+    def __str__(self) -> str:
+        """Texto con la fecha, la acción y los detalles."""
+        return f"{self._fecha:%d/%m/%Y %H:%M:%S} {self._accion}: {self._detalles}"

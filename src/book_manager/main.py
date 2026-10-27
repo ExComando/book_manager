@@ -6,15 +6,22 @@ from book_manager.migrations.migrations import (
     CARPETA_SQL_DEFECTO, TABLAS, cargar_datos_desde_sql)
 from book_manager.models.models import crear_tablas
 from book_manager.repositories.repositories import (
-    RepositorioCotizacionDolar, RepositorioEditorial, RepositorioGenero, RepositorioLibro,
-    RepositorioMoneda, RepositorioPrecio, RepositorioPrecioWeb, RepositorioStock,
-    RepositorioTipoCotizacion)
+    RepositorioAuditoria, RepositorioCotizacionDolar, RepositorioEditorial,
+    RepositorioGenero, RepositorioLibro, RepositorioMoneda, RepositorioPrecio,
+    RepositorioPrecioWeb, RepositorioStock, RepositorioTipoCotizacion)
 from book_manager.scraper.runner import lanzar_scraper
 from book_manager.services.services import (
-    DolarApiProveedor, ServicioCotizacionDolar, ServicioEditorial, ServicioGenero,
-    ServicioLibro, ServicioMoneda, ServicioPrecio, ServicioScraping, ServicioStock,
-    ServicioTipoCotizacion)
+    DolarApiProveedor, ServicioAuditoria, ServicioCotizacionDolar, ServicioEditorial,
+    ServicioGenero, ServicioLibro, ServicioMoneda, ServicioPrecio, ServicioScraping,
+    ServicioStock, ServicioTipoCotizacion, configurar_auditoria)
 from book_manager.ui.console import Consola
+
+
+def _configurar_auditoria(conexion: ConexionDB) -> ServicioAuditoria:
+    """Crea el servicio de auditoría y se lo entrega al decorador @auditar."""
+    servicio = ServicioAuditoria(RepositorioAuditoria(conexion))
+    configurar_auditoria(servicio)
+    return servicio
 
 
 def crear_consola(conexion: ConexionDB) -> Consola:
@@ -28,6 +35,7 @@ def crear_consola(conexion: ConexionDB) -> Consola:
     repo_stock = RepositorioStock(conexion)
     repo_cotizacion = RepositorioCotizacionDolar(conexion)
     repo_precio_web = RepositorioPrecioWeb(conexion)
+    servicio_auditoria = _configurar_auditoria(conexion)
 
     servicio_cotizacion = ServicioCotizacionDolar(
         repo_cotizacion, repo_tipo, DolarApiProveedor())
@@ -43,7 +51,8 @@ def crear_consola(conexion: ConexionDB) -> Consola:
         precios=servicio_precio,
         stock=ServicioStock(repo_stock),
         cotizaciones=servicio_cotizacion,
-        scraping=servicio_scraping)
+        scraping=servicio_scraping,
+        auditoria=servicio_auditoria)
 
 
 def _base_sin_datos(conexion: ConexionDB) -> bool:
@@ -65,10 +74,12 @@ def main(import_default_data: bool = False) -> None:
     conexion = ConexionDB()
     try:
         crear_tablas(conexion.engine)
+        _configurar_auditoria(conexion)
         if import_default_data or _base_sin_datos(conexion):
             cargar_datos_desde_sql(CARPETA_SQL_DEFECTO, conexion)
         crear_consola(conexion).ejecutar()
     finally:
+        configurar_auditoria(None)
         conexion.cerrar()
 
 

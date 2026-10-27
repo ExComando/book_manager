@@ -123,6 +123,17 @@ class PrecioWebModel(Base):
     libro: Mapped[LibroModel] = relationship(lazy="joined")
 
 
+class AuditoriaModel(Base):
+    """Tabla auditoria: historial de las operaciones realizadas en el sistema."""
+
+    __tablename__ = "auditoria"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    accion: Mapped[str] = mapped_column(String(120))
+    fecha: Mapped[datetime.datetime] = mapped_column(DateTime, index=True)
+    detalles: Mapped[str] = mapped_column(Text)
+
+
 class StockModel(Base):
     """Tabla stock: unidades disponibles de cada libro (un registro por libro)."""
 

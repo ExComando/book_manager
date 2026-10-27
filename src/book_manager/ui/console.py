@@ -7,11 +7,13 @@ import requests
 
 from book_manager.entities.entities import CotizacionDolar, Libro, Precio, Stock
 from book_manager.services.services import (
-    ServicioCotizacionDolar, ServicioEditorial, ServicioGenero, ServicioLibro,
-    ServicioMoneda, ServicioPrecio, ServicioScraping, ServicioStock, ServicioTipoCotizacion)
+    ServicioAuditoria, ServicioCotizacionDolar, ServicioEditorial, ServicioGenero,
+    ServicioLibro, ServicioMoneda, ServicioPrecio, ServicioScraping, ServicioStock,
+    ServicioTipoCotizacion, auditar)
 
 T = TypeVar("T")
 Opcion = Tuple[str, Callable[[], None]]
+LIMITE_HISTORIAL = 30  # cuántas operaciones muestra "Ver historial de auditoría"
 
 
 # ---------------------------------------------------------------- entrada de datos
@@ -124,7 +126,7 @@ class Consola:
                  monedas: ServicioMoneda, tipos: ServicioTipoCotizacion,
                  libros: ServicioLibro, precios: ServicioPrecio,
                  stock: ServicioStock, cotizaciones: ServicioCotizacionDolar,
-                 scraping: ServicioScraping) -> None:
+                 scraping: ServicioScraping, auditoria: ServicioAuditoria) -> None:
         self._generos = generos
         self._editoriales = editoriales
         self._monedas = monedas
@@ -134,6 +136,7 @@ class Consola:
         self._stock = stock
         self._cotizaciones = cotizaciones
         self._scraping = scraping
+        self._auditoria = auditoria
 
     # ------------------------------------------------------------ menús
     @staticmethod
@@ -174,10 +177,13 @@ class Consola:
             ("Exportar los precios a CSV", self._exportar_precios),
             ("Ejecutar scraping", self._ejecutar_scraping),
             ("Generar reporte", self._generar_reporte),
+            ("Ver historial de auditoría", self._ver_historial),
         ], salir="Salir")
         print("¡Hasta luego!")
 
     @staticmethod
+    @auditar("Listar {titulo}",
+             detalle=lambda argumentos, resultado: f"{len(argumentos['items'])} registros")
     def _listar(titulo: str, items: Sequence[T], describir: Callable[[T], str]) -> None:
         """Imprime un listado numerado."""
         print(f"\n--- {titulo} ({len(items)}) ---")
@@ -447,6 +453,18 @@ class Consola:
               f"{resultado.fecha_extraccion:%d/%m/%Y %H:%M} "
               f"(sin coincidencia en Cúspide: {resultado.sin_coincidencia}).")
         print(f"Archivo: {resultado.ruta}")
+
+    def _ver_historial(self) -> None:
+        """Muestra las últimas operaciones registradas en la auditoría."""
+        registros = self._auditoria.historial(LIMITE_HISTORIAL)
+        print(f"\n--- Historial de auditoría (últimas {LIMITE_HISTORIAL}, "
+              "más recientes primero) ---")
+        if not registros:
+            print("Todavía no hay operaciones registradas.")
+        for registro in registros:
+            print(f"{registro.fecha:%d/%m/%Y %H:%M:%S}  {registro.accion}")
+            if registro.detalles:
+                print(f"    {registro.detalles}")
 
     # ------------------------------------------------------------ reportes
     def _menu_reportes(self) -> None:

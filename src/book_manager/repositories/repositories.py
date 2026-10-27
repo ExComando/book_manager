@@ -15,10 +15,10 @@ from sqlalchemy.orm import Session
 
 from book_manager.database.connection import ConexionDB
 from book_manager.entities.entities import (
-    CotizacionDolar, Editorial, EntidadBase, Genero, Libro, Moneda,
+    Auditoria, CotizacionDolar, Editorial, EntidadBase, Genero, Libro, Moneda,
     Precio, PrecioWeb, Stock, TipoCotizacion)
 from book_manager.models.models import (
-    CotizacionDolarModel, EditorialModel, GeneroModel, LibroModel, MonedaModel,
+    AuditoriaModel, CotizacionDolarModel, EditorialModel, GeneroModel, LibroModel, MonedaModel,
     PrecioModel, PrecioWebModel, StockModel, TipoCotizacionModel)
 
 T = TypeVar('T', bound=EntidadBase)
@@ -375,6 +375,7 @@ class RepositorioPrecioWeb(RepositorioDB[PrecioWeb]):
             fecha: fecha y hora de la corrida. Si no se indica, la más reciente.
         """
         def operacion(sesion: Session) -> List[PrecioWeb]:
+            """Lee los precios web de la corrida pedida (o la más reciente)."""
             objetivo = fecha
             if objetivo is None:
                 objetivo = sesion.scalar(select(func.max(PrecioWebModel.fecha_extraccion)))
@@ -399,6 +400,42 @@ class RepositorioPrecioWeb(RepositorioDB[PrecioWeb]):
         modelo.posicion = entidad.posicion
         modelo.coincide_isbn = entidad.coincide_isbn
         modelo.fecha_extraccion = entidad.fecha_extraccion
+
+
+class RepositorioAuditoria(RepositorioDB[Auditoria]):
+    """Persistencia del historial de auditoría."""
+
+    _MODELO = AuditoriaModel
+
+    def _a_entidad(self, modelo: AuditoriaModel) -> Auditoria:
+        """Convierte el modelo de la tabla en la entidad Auditoria."""
+        return Auditoria(modelo.id, modelo.accion, modelo.fecha, modelo.detalles)
+
+    def _a_modelo(self, entidad: Auditoria) -> AuditoriaModel:
+        """Crea un modelo nuevo a partir de la entidad."""
+        return AuditoriaModel(id=entidad.id, accion=entidad.accion, fecha=entidad.fecha,
+                              detalles=entidad.detalles)
+
+    def _copiar(self, modelo: AuditoriaModel, entidad: Auditoria) -> None:
+        """Copia los datos de la entidad a un modelo existente."""
+        modelo.accion = entidad.accion
+        modelo.fecha = entidad.fecha
+        modelo.detalles = entidad.detalles
+
+    def leer_recientes(self, limite: Optional[int] = None) -> List[Auditoria]:
+        """Devuelve las operaciones registradas, de la más reciente a la más antigua.
+
+        Args:
+            limite: cantidad máxima de registros. Si no se indica, devuelve todos.
+        """
+        def operacion(sesion: Session) -> List[Auditoria]:
+            """Lee los registros de auditoría, los más recientes primero."""
+            consulta = select(AuditoriaModel).order_by(
+                AuditoriaModel.fecha.desc(), AuditoriaModel.id.desc())
+            if limite is not None:
+                consulta = consulta.limit(limite)
+            return [self._a_entidad(modelo) for modelo in sesion.scalars(consulta).all()]
+        return self._ejecutar(operacion)
 
 
 class RepositorioStock(_RepositorioBase, IRepositorioStock):

@@ -12,6 +12,7 @@ from typing import List, Tuple
 
 from book_manager.database.connection import ConexionDB
 from book_manager.models.models import crear_tablas
+from book_manager.services.services import auditar
 
 _BASE = os.path.dirname(os.path.abspath(__file__))
 CARPETA_CSV_DEFECTO = os.path.join(_BASE, "csv")
@@ -160,6 +161,9 @@ def _archivos_sql(ruta: str) -> List[str]:
     return archivos
 
 
+@auditar("Cargar datos desde SQL",
+         detalle=lambda argumentos, resultado:
+         f"{resultado} sentencias ejecutadas desde {argumentos['ruta']}")
 def cargar_datos_desde_sql(ruta: str, conexion: ConexionDB) -> int:
     """Carga en la base los datos de un archivo .sql o de todos los .sql de una carpeta.
 

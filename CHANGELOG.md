@@ -2,6 +2,12 @@
 
 # Sprint 3
 
+[Ejercicio 06]
+
+- Decorador @auditar que registra en la tabla auditoria (acción, fecha, detalles) cada operación del sistema, incluidos los errores; las operaciones anidadas se registran una sola vez.
+- Nuevos AuditoriaModel, entidad Auditoria, RepositorioAuditoria y ServicioAuditoria.
+- Opción de menú "Ver historial de auditoría".
+
 [Ejercicio 05]
 
 - Reporte en Excel (openpyxl) con Libro, Precio interno, Precio web, Diferencia y Fecha de extracción, generado desde la última extracción del scraper.
