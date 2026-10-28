@@ -110,27 +110,33 @@ class IRepositorioCotizacionDolar(abc.ABC):
 
 # ---------------------------------------------------------------- modelo -> entidad
 def _a_genero(modelo: GeneroModel) -> Genero:
+    """Convierte el modelo de la tabla generos en la entidad Genero."""
     return Genero(modelo.id, modelo.nombre)
 
 
 def _a_editorial(modelo: EditorialModel) -> Editorial:
+    """Convierte el modelo de la tabla editoriales en la entidad Editorial."""
     return Editorial(modelo.id, modelo.nombre, modelo.pais)
 
 
 def _a_moneda(modelo: MonedaModel) -> Moneda:
+    """Convierte el modelo de la tabla monedas en la entidad Moneda."""
     return Moneda(modelo.id, modelo.codigo, modelo.nombre, modelo.simbolo)
 
 
 def _a_tipo(modelo: TipoCotizacionModel) -> TipoCotizacion:
+    """Convierte el modelo de la tabla tipos_cotizacion en la entidad TipoCotizacion."""
     return TipoCotizacion(modelo.id, modelo.nombre)
 
 
 def _a_libro(modelo: LibroModel) -> Libro:
+    """Convierte el modelo de la tabla libros en un Libro, con su editorial y su género."""
     return Libro(modelo.id, modelo.isbn, modelo.titulo, modelo.autor,
                  _a_editorial(modelo.editorial), _a_genero(modelo.genero))
 
 
 def _a_precio(modelo: PrecioModel) -> Precio:
+    """Convierte el modelo de la tabla precios en un Precio, con su libro y su moneda."""
     return Precio(modelo.id, _a_libro(modelo.libro), _a_moneda(modelo.moneda), modelo.valor)
 
 
@@ -143,10 +149,12 @@ def _a_precio_web(modelo: PrecioWebModel) -> PrecioWeb:
 
 
 def _a_stock(modelo: StockModel) -> Stock:
+    """Convierte el modelo de la tabla stock en un Stock, con su libro."""
     return Stock(_a_libro(modelo.libro), modelo.cantidad)
 
 
 def _a_cotizacion(modelo: CotizacionDolarModel) -> CotizacionDolar:
+    """Convierte el modelo de la tabla cotizaciones en una CotizacionDolar, con su tipo."""
     return CotizacionDolar(_a_tipo(modelo.tipo), modelo.fecha,
                            modelo.valor_compra, modelo.valor_venta)
 
@@ -171,6 +179,7 @@ class _RepositorioBase:
     """Ejecuta las operaciones de un repositorio dentro de una transacción."""
 
     def __init__(self, conexion: ConexionDB) -> None:
+        """Guarda la conexión a la base de datos que usa el repositorio."""
         self._conexion = conexion
 
     def _ejecutar(self, operacion: Callable[[Session], R]) -> R:
@@ -206,7 +215,9 @@ class RepositorioDB(_RepositorioBase, IRepositorio[T]):
         return self._ejecutar(lambda sesion: sesion.scalar(consulta))
 
     def crear(self, entidad: T) -> T:
+        """Guarda una entidad nueva; falla si ya existe una con el mismo id."""
         def operacion(sesion: Session) -> T:
+            """Inserta el modelo de la entidad dentro de la transacción."""
             if sesion.get(self._MODELO, entidad.id) is not None:
                 raise ValueError(f"Ya existe una entidad con id {entidad.id}.")
             sesion.add(self._a_modelo(entidad))
@@ -215,19 +226,25 @@ class RepositorioDB(_RepositorioBase, IRepositorio[T]):
         return self._ejecutar(operacion)
 
     def leer_por_id(self, id: int) -> Optional[T]:
+        """Devuelve la entidad con ese id, o None si no existe."""
         def operacion(sesion: Session) -> Optional[T]:
+            """Busca el modelo por id y lo convierte en entidad."""
             modelo = sesion.get(self._MODELO, id)
             return None if modelo is None else self._a_entidad(modelo)
         return self._ejecutar(operacion)
 
     def leer_todos(self) -> List[T]:
+        """Devuelve todas las entidades, ordenadas por id."""
         def operacion(sesion: Session) -> List[T]:
+            """Lee todos los modelos, ordenados por id."""
             modelos = sesion.scalars(select(self._MODELO).order_by(self._MODELO.id)).all()
             return [self._a_entidad(modelo) for modelo in modelos]
         return self._ejecutar(operacion)
 
     def actualizar(self, entidad: T) -> T:
+        """Actualiza una entidad existente; falla si no existe."""
         def operacion(sesion: Session) -> T:
+            """Copia los datos de la entidad al modelo guardado."""
             modelo = sesion.get(self._MODELO, entidad.id)
             if modelo is None:
                 raise ValueError(f"No existe una entidad con id {entidad.id}.")
@@ -237,7 +254,9 @@ class RepositorioDB(_RepositorioBase, IRepositorio[T]):
         return self._ejecutar(operacion)
 
     def eliminar(self, id: int) -> bool:
+        """Elimina la entidad con ese id. Devuelve False si no existía."""
         def operacion(sesion: Session) -> bool:
+            """Borra el modelo si existe."""
             modelo = sesion.get(self._MODELO, id)
             if modelo is None:
                 return False
@@ -253,12 +272,15 @@ class RepositorioGenero(RepositorioDB[Genero]):
     _MODELO = GeneroModel
 
     def _a_entidad(self, modelo: GeneroModel) -> Genero:
+        """Convierte el modelo de la tabla en la entidad Genero."""
         return _a_genero(modelo)
 
     def _a_modelo(self, entidad: Genero) -> GeneroModel:
+        """Crea un modelo nuevo a partir de la entidad."""
         return GeneroModel(id=entidad.id, nombre=entidad.nombre)
 
     def _copiar(self, modelo: GeneroModel, entidad: Genero) -> None:
+        """Copia los datos de la entidad a un modelo existente."""
         modelo.nombre = entidad.nombre
 
 
@@ -268,12 +290,15 @@ class RepositorioEditorial(RepositorioDB[Editorial]):
     _MODELO = EditorialModel
 
     def _a_entidad(self, modelo: EditorialModel) -> Editorial:
+        """Convierte el modelo de la tabla en la entidad Editorial."""
         return _a_editorial(modelo)
 
     def _a_modelo(self, entidad: Editorial) -> EditorialModel:
+        """Crea un modelo nuevo a partir de la entidad."""
         return EditorialModel(id=entidad.id, nombre=entidad.nombre, pais=entidad.pais)
 
     def _copiar(self, modelo: EditorialModel, entidad: Editorial) -> None:
+        """Copia los datos de la entidad a un modelo existente."""
         modelo.nombre = entidad.nombre
         modelo.pais = entidad.pais
 
@@ -284,13 +309,16 @@ class RepositorioMoneda(RepositorioDB[Moneda]):
     _MODELO = MonedaModel
 
     def _a_entidad(self, modelo: MonedaModel) -> Moneda:
+        """Convierte el modelo de la tabla en la entidad Moneda."""
         return _a_moneda(modelo)
 
     def _a_modelo(self, entidad: Moneda) -> MonedaModel:
+        """Crea un modelo nuevo a partir de la entidad."""
         return MonedaModel(id=entidad.id, codigo=entidad.codigo, nombre=entidad.nombre,
                            simbolo=entidad.simbolo)
 
     def _copiar(self, modelo: MonedaModel, entidad: Moneda) -> None:
+        """Copia los datos de la entidad a un modelo existente."""
         modelo.codigo = entidad.codigo
         modelo.nombre = entidad.nombre
         modelo.simbolo = entidad.simbolo
@@ -302,12 +330,15 @@ class RepositorioTipoCotizacion(RepositorioDB[TipoCotizacion]):
     _MODELO = TipoCotizacionModel
 
     def _a_entidad(self, modelo: TipoCotizacionModel) -> TipoCotizacion:
+        """Convierte el modelo de la tabla en la entidad TipoCotizacion."""
         return _a_tipo(modelo)
 
     def _a_modelo(self, entidad: TipoCotizacion) -> TipoCotizacionModel:
+        """Crea un modelo nuevo a partir de la entidad."""
         return TipoCotizacionModel(id=entidad.id, nombre=entidad.nombre)
 
     def _copiar(self, modelo: TipoCotizacionModel, entidad: TipoCotizacion) -> None:
+        """Copia los datos de la entidad a un modelo existente."""
         modelo.nombre = entidad.nombre
 
 
@@ -317,14 +348,17 @@ class RepositorioLibro(RepositorioDB[Libro]):
     _MODELO = LibroModel
 
     def _a_entidad(self, modelo: LibroModel) -> Libro:
+        """Convierte el modelo de la tabla en la entidad Libro."""
         return _a_libro(modelo)
 
     def _a_modelo(self, entidad: Libro) -> LibroModel:
+        """Crea un modelo nuevo a partir de la entidad."""
         return LibroModel(id=entidad.id, isbn=entidad.isbn, titulo=entidad.titulo,
                           autor=entidad.autor, editorial_id=entidad.editorial.id,
                           genero_id=entidad.genero.id)
 
     def _copiar(self, modelo: LibroModel, entidad: Libro) -> None:
+        """Copia los datos de la entidad a un modelo existente."""
         modelo.isbn = entidad.isbn
         modelo.titulo = entidad.titulo
         modelo.autor = entidad.autor
@@ -338,13 +372,16 @@ class RepositorioPrecio(RepositorioDB[Precio]):
     _MODELO = PrecioModel
 
     def _a_entidad(self, modelo: PrecioModel) -> Precio:
+        """Convierte el modelo de la tabla en la entidad Precio."""
         return _a_precio(modelo)
 
     def _a_modelo(self, entidad: Precio) -> PrecioModel:
+        """Crea un modelo nuevo a partir de la entidad."""
         return PrecioModel(id=entidad.id, libro_id=entidad.libro.id,
                            moneda_id=entidad.moneda.id, valor=entidad.valor)
 
     def _copiar(self, modelo: PrecioModel, entidad: Precio) -> None:
+        """Copia los datos de la entidad a un modelo existente."""
         modelo.libro_id = entidad.libro.id
         modelo.moneda_id = entidad.moneda.id
         modelo.valor = entidad.valor
@@ -442,7 +479,9 @@ class RepositorioStock(_RepositorioBase, IRepositorioStock):
     """Persistencia de stock, un registro por libro (el id del registro es el del libro)."""
 
     def crear(self, stock: Stock) -> Stock:
+        """Guarda el stock de un libro; falla si ese libro ya tiene stock."""
         def operacion(sesion: Session) -> Stock:
+            """Inserta el registro de stock dentro de la transacción."""
             if sesion.get(StockModel, stock.libro_id) is not None:
                 raise ValueError(f"Ya existe stock para el libro {stock.libro_id}.")
             sesion.add(StockModel(libro_id=stock.libro_id, cantidad=stock.cantidad))
@@ -451,7 +490,9 @@ class RepositorioStock(_RepositorioBase, IRepositorioStock):
         return self._ejecutar(operacion)
 
     def leer_por_libro(self, libro_id: int) -> Optional[Stock]:
+        """Devuelve el stock de un libro, o None si no tiene."""
         def operacion(sesion: Session) -> Optional[Stock]:
+            """Busca el stock por id de libro y lo convierte en entidad."""
             modelo = sesion.get(StockModel, libro_id)
             return None if modelo is None else _a_stock(modelo)
         return self._ejecutar(operacion)
@@ -461,13 +502,17 @@ class RepositorioStock(_RepositorioBase, IRepositorioStock):
         return self.leer_por_libro(id)
 
     def leer_todos(self) -> List[Stock]:
+        """Devuelve el stock de todos los libros, ordenado por libro."""
         def operacion(sesion: Session) -> List[Stock]:
+            """Lee todos los registros de stock, ordenados por libro."""
             modelos = sesion.scalars(select(StockModel).order_by(StockModel.libro_id)).all()
             return [_a_stock(modelo) for modelo in modelos]
         return self._ejecutar(operacion)
 
     def actualizar(self, stock: Stock) -> Stock:
+        """Actualiza la cantidad en stock de un libro; falla si no hay stock cargado."""
         def operacion(sesion: Session) -> Stock:
+            """Guarda la nueva cantidad en el registro de stock."""
             modelo = sesion.get(StockModel, stock.libro_id)
             if modelo is None:
                 raise ValueError(f"No existe stock para el libro {stock.libro_id}.")
@@ -477,7 +522,9 @@ class RepositorioStock(_RepositorioBase, IRepositorioStock):
         return self._ejecutar(operacion)
 
     def eliminar(self, libro_id: int) -> bool:
+        """Elimina el stock de un libro. Devuelve False si no existía."""
         def operacion(sesion: Session) -> bool:
+            """Borra el registro de stock si existe."""
             modelo = sesion.get(StockModel, libro_id)
             if modelo is None:
                 return False
@@ -491,7 +538,9 @@ class RepositorioCotizacionDolar(_RepositorioBase, IRepositorioCotizacionDolar):
     """Persistencia del histórico de cotizaciones, identificadas por tipo y fecha."""
 
     def crear(self, cotizacion: CotizacionDolar) -> CotizacionDolar:
+        """Guarda una cotización nueva; falla si ya hay una para ese tipo y fecha."""
         def operacion(sesion: Session) -> CotizacionDolar:
+            """Inserta la cotización dentro de la transacción."""
             if sesion.get(CotizacionDolarModel,
                           (cotizacion.tipo_id, cotizacion.fecha)) is not None:
                 raise ValueError("Ya existe una cotización para ese tipo y fecha.")
@@ -504,7 +553,9 @@ class RepositorioCotizacionDolar(_RepositorioBase, IRepositorioCotizacionDolar):
 
     def leer_por_tipo_y_fecha(
             self, tipo_id: int, fecha: datetime.date) -> Optional[CotizacionDolar]:
+        """Devuelve la cotización de un tipo en una fecha, o None si no existe."""
         def operacion(sesion: Session) -> Optional[CotizacionDolar]:
+            """Busca la cotización por tipo y fecha y la convierte en entidad."""
             modelo = sesion.get(CotizacionDolarModel, (tipo_id, fecha))
             return None if modelo is None else _a_cotizacion(modelo)
         return self._ejecutar(operacion)
@@ -514,7 +565,9 @@ class RepositorioCotizacionDolar(_RepositorioBase, IRepositorioCotizacionDolar):
         return self.leer_por_tipo_y_fecha(tipo_id, fecha)
 
     def leer_historico_por_tipo(self, tipo_id: int) -> List[CotizacionDolar]:
+        """Devuelve todas las cotizaciones de un tipo, de la más antigua a la más nueva."""
         def operacion(sesion: Session) -> List[CotizacionDolar]:
+            """Lee las cotizaciones del tipo, ordenadas por fecha."""
             consulta = (select(CotizacionDolarModel)
                         .where(CotizacionDolarModel.tipo_id == tipo_id)
                         .order_by(CotizacionDolarModel.fecha))
@@ -522,14 +575,18 @@ class RepositorioCotizacionDolar(_RepositorioBase, IRepositorioCotizacionDolar):
         return self._ejecutar(operacion)
 
     def leer_todos(self) -> List[CotizacionDolar]:
+        """Devuelve todas las cotizaciones, ordenadas por tipo y fecha."""
         def operacion(sesion: Session) -> List[CotizacionDolar]:
+            """Lee todas las cotizaciones, ordenadas por tipo y fecha."""
             consulta = select(CotizacionDolarModel).order_by(
                 CotizacionDolarModel.tipo_id, CotizacionDolarModel.fecha)
             return [_a_cotizacion(modelo) for modelo in sesion.scalars(consulta).all()]
         return self._ejecutar(operacion)
 
     def actualizar(self, cotizacion: CotizacionDolar) -> CotizacionDolar:
+        """Actualiza los valores de compra y venta de una cotización existente."""
         def operacion(sesion: Session) -> CotizacionDolar:
+            """Guarda los nuevos valores en la cotización existente."""
             modelo = sesion.get(CotizacionDolarModel, (cotizacion.tipo_id, cotizacion.fecha))
             if modelo is None:
                 raise ValueError("No existe una cotización para ese tipo y fecha.")
@@ -540,7 +597,9 @@ class RepositorioCotizacionDolar(_RepositorioBase, IRepositorioCotizacionDolar):
         return self._ejecutar(operacion)
 
     def eliminar(self, tipo_id: int, fecha: datetime.date) -> bool:
+        """Elimina la cotización de un tipo en una fecha. Devuelve False si no existía."""
         def operacion(sesion: Session) -> bool:
+            """Borra la cotización si existe."""
             modelo = sesion.get(CotizacionDolarModel, (tipo_id, fecha))
             if modelo is None:
                 return False

@@ -194,6 +194,7 @@ class ServicioBase(Generic[T]):
     ENTIDAD = "registro"
 
     def __init__(self, repositorio: RepositorioDB[T]) -> None:
+        """Guarda el repositorio con el que se leen y escriben las entidades."""
         self._repositorio = repositorio
 
     def listar(self) -> List[T]:
@@ -236,21 +237,25 @@ class ServicioGenero(ServicioBase[Genero]):
     ENTIDAD = "género"
 
     def __init__(self, repositorio: RepositorioGenero, repo_libro: RepositorioLibro) -> None:
+        """Guarda el repositorio de géneros y el de libros (para validar las bajas)."""
         super().__init__(repositorio)
         self._repo_libro = repo_libro
 
     @auditar("Crear {objeto}")
     def crear(self, nombre: str) -> Genero:
+        """Crea un género nuevo; no se permiten nombres repetidos."""
         self._validar_nombre_unico(nombre)
         genero = Genero(self._repositorio.siguiente_id(), nombre)
         return self._repositorio.crear(genero)
 
     @auditar("Modificar {objeto}")
     def modificar(self, genero: Genero) -> Genero:
+        """Guarda los cambios de un género, sin permitir un nombre ya usado por otro."""
         self._validar_nombre_unico(genero.nombre, genero.id)
         return super().modificar(genero)
 
     def _validar_eliminacion(self, entidad: Genero) -> None:
+        """Impide eliminar un género si hay libros que lo usan."""
         if any(libro.genero == entidad for libro in self._repo_libro.leer_todos()):
             raise ValueError("No se puede eliminar: hay libros con este género.")
 
@@ -261,21 +266,25 @@ class ServicioEditorial(ServicioBase[Editorial]):
     ENTIDAD = "editorial"
 
     def __init__(self, repositorio: RepositorioEditorial, repo_libro: RepositorioLibro) -> None:
+        """Guarda el repositorio de editoriales y el de libros (para validar las bajas)."""
         super().__init__(repositorio)
         self._repo_libro = repo_libro
 
     @auditar("Crear {objeto}")
     def crear(self, nombre: str, pais: str = "Argentina") -> Editorial:
+        """Crea una editorial nueva (país por defecto: Argentina), sin nombres repetidos."""
         self._validar_nombre_unico(nombre)
         editorial = Editorial(self._repositorio.siguiente_id(), nombre, pais)
         return self._repositorio.crear(editorial)
 
     @auditar("Modificar {objeto}")
     def modificar(self, editorial: Editorial) -> Editorial:
+        """Guarda los cambios de una editorial, sin permitir un nombre ya usado por otra."""
         self._validar_nombre_unico(editorial.nombre, editorial.id)
         return super().modificar(editorial)
 
     def _validar_eliminacion(self, entidad: Editorial) -> None:
+        """Impide eliminar una editorial si tiene libros."""
         if any(libro.editorial == entidad for libro in self._repo_libro.leer_todos()):
             raise ValueError("No se puede eliminar: hay libros de esta editorial.")
 
@@ -286,11 +295,13 @@ class ServicioMoneda(ServicioBase[Moneda]):
     ENTIDAD = "moneda"
 
     def __init__(self, repositorio: RepositorioMoneda, repo_precio: RepositorioPrecio) -> None:
+        """Guarda el repositorio de monedas y el de precios (para validar las bajas)."""
         super().__init__(repositorio)
         self._repo_precio = repo_precio
 
     @auditar("Crear {objeto}")
     def crear(self, codigo: str, nombre: str, simbolo: str) -> Moneda:
+        """Crea una moneda nueva; no se permiten códigos repetidos."""
         for existente in self._repositorio.leer_todos():
             if existente.codigo == codigo.strip().upper():
                 raise ValueError(f"Ya existe la moneda {codigo}.")
@@ -305,6 +316,7 @@ class ServicioMoneda(ServicioBase[Moneda]):
         raise ValueError(f"No existe la moneda {codigo}.")
 
     def _validar_eliminacion(self, entidad: Moneda) -> None:
+        """Impide eliminar una moneda si hay precios expresados en ella."""
         if any(precio.moneda == entidad for precio in self._repo_precio.leer_todos()):
             raise ValueError("No se puede eliminar: hay precios en esta moneda.")
 
@@ -316,21 +328,25 @@ class ServicioTipoCotizacion(ServicioBase[TipoCotizacion]):
 
     def __init__(self, repositorio: RepositorioTipoCotizacion,
                  repo_cotizacion: RepositorioCotizacionDolar) -> None:
+        """Guarda el repositorio de tipos y el de cotizaciones (para validar las bajas)."""
         super().__init__(repositorio)
         self._repo_cotizacion = repo_cotizacion
 
     @auditar("Crear {objeto}")
     def crear(self, nombre: str) -> TipoCotizacion:
+        """Crea un tipo de cotización nuevo; no se permiten nombres repetidos."""
         self._validar_nombre_unico(nombre)
         tipo = TipoCotizacion(self._repositorio.siguiente_id(), nombre)
         return self._repositorio.crear(tipo)
 
     @auditar("Modificar {objeto}")
     def modificar(self, tipo: TipoCotizacion) -> TipoCotizacion:
+        """Guarda los cambios de un tipo, sin permitir un nombre ya usado por otro."""
         self._validar_nombre_unico(tipo.nombre, tipo.id)
         return super().modificar(tipo)
 
     def _validar_eliminacion(self, entidad: TipoCotizacion) -> None:
+        """Impide eliminar un tipo de cotización si tiene cotizaciones registradas."""
         if self._repo_cotizacion.leer_historico_por_tipo(entidad.id):
             raise ValueError("No se puede eliminar: tiene cotizaciones registradas.")
 
@@ -342,11 +358,13 @@ class ServicioLibro(ServicioBase[Libro]):
 
     def __init__(self, repositorio: RepositorioLibro, repo_precio: RepositorioPrecio,
                  repo_stock: RepositorioStock) -> None:
+        """Guarda los repositorios de libros, de precios y de stock."""
         super().__init__(repositorio)
         self._repo_precio = repo_precio
         self._repo_stock = repo_stock
 
     def _validar_isbn_unico(self, isbn: str, id_actual: Optional[int] = None) -> None:
+        """Verifica que no exista otro libro con el mismo ISBN (los guiones no cuentan)."""
         limpio = isbn.replace("-", "").strip()
         for existente in self._repositorio.leer_todos():
             if existente.isbn == limpio and existente.id != id_actual:
@@ -355,12 +373,14 @@ class ServicioLibro(ServicioBase[Libro]):
     @auditar("Crear {objeto}")
     def crear(self, isbn: str, titulo: str, autor: str,
               editorial: Editorial, genero: Genero) -> Libro:
+        """Crea un libro nuevo; no se permiten ISBN repetidos."""
         self._validar_isbn_unico(isbn)
         libro = Libro(self._repositorio.siguiente_id(), isbn, titulo, autor, editorial, genero)
         return self._repositorio.crear(libro)
 
     @auditar("Modificar {objeto}")
     def modificar(self, libro: Libro) -> Libro:
+        """Guarda los cambios de un libro, sin permitir un ISBN ya usado por otro."""
         self._validar_isbn_unico(libro.isbn, libro.id)
         return super().modificar(libro)
 
@@ -404,6 +424,7 @@ class DolarApiProveedor(IProveedorCotizacion):
         self._url = url
 
     def _direccion(self) -> str:
+        """Devuelve la URL de la API: la indicada al crear el proveedor o API_URL del entorno."""
         cargar_variables_entorno()
         url = self._url or os.getenv("API_URL")
         if not url:
@@ -411,6 +432,7 @@ class DolarApiProveedor(IProveedorCotizacion):
         return url
 
     def obtener_todas(self) -> List[Dict[str, object]]:
+        """Consulta la API y devuelve la lista de cotizaciones tal como la entrega."""
         respuesta = requests.get(self._direccion(), timeout=10)
         respuesta.raise_for_status()
         datos = respuesta.json()
@@ -435,6 +457,7 @@ class ServicioCotizacionDolar:
     def __init__(self, repositorio: RepositorioCotizacionDolar,
                  repo_tipo: RepositorioTipoCotizacion,
                  proveedor: IProveedorCotizacion) -> None:
+        """Guarda los repositorios de cotizaciones y tipos, y el proveedor que consulta la API."""
         self._repositorio = repositorio
         self._repo_tipo = repo_tipo
         self._proveedor = proveedor
@@ -448,10 +471,12 @@ class ServicioCotizacionDolar:
 
     @auditar("Modificar {objeto}")
     def modificar(self, cotizacion: CotizacionDolar) -> CotizacionDolar:
+        """Guarda los cambios de una cotización."""
         return self._repositorio.actualizar(cotizacion)
 
     @auditar("Eliminar {objeto}")
     def eliminar(self, tipo: TipoCotizacion, fecha: datetime.date) -> bool:
+        """Elimina la cotización de un tipo en una fecha. Devuelve True si se eliminó."""
         return self._repositorio.eliminar(tipo.id, fecha)
 
     def historico(self, tipo: TipoCotizacion) -> List[CotizacionDolar]:
@@ -459,6 +484,7 @@ class ServicioCotizacionDolar:
         return self._repositorio.leer_historico_por_tipo(tipo.id)
 
     def listar(self) -> List[CotizacionDolar]:
+        """Devuelve todas las cotizaciones registradas."""
         return self._repositorio.leer_todos()
 
     def ultima(self, tipo: TipoCotizacion) -> Optional[CotizacionDolar]:
@@ -539,6 +565,7 @@ class ServicioPrecio(ServicioBase[Precio]):
 
     def __init__(self, repositorio: RepositorioPrecio,
                  servicio_cotizacion: ServicioCotizacionDolar) -> None:
+        """Guarda el repositorio de precios y el servicio de cotizaciones del dólar."""
         super().__init__(repositorio)
         self._servicio_cotizacion = servicio_cotizacion
 
@@ -548,6 +575,7 @@ class ServicioPrecio(ServicioBase[Precio]):
 
     @auditar("Crear {objeto}")
     def crear(self, libro: Libro, moneda: Moneda, valor) -> Precio:
+        """Crea un precio para un libro; no puede tener dos precios en la misma moneda."""
         if any(precio.moneda == moneda for precio in self.precios_de_libro(libro)):
             raise ValueError(f"El libro ya tiene un precio en {moneda.codigo}.")
         precio = Precio(self._repositorio.siguiente_id(), libro, moneda, valor)
@@ -682,16 +710,20 @@ class ServicioStock:
     ENTIDAD = "stock"
 
     def __init__(self, repositorio: RepositorioStock) -> None:
+        """Guarda el repositorio de stock."""
         self._repositorio = repositorio
 
     @auditar("Crear {objeto}")
     def crear(self, libro: Libro, cantidad: int) -> Stock:
+        """Crea el registro de stock de un libro con la cantidad indicada."""
         return self._repositorio.crear(Stock(libro, cantidad))
 
     def listar(self) -> List[Stock]:
+        """Devuelve el stock de todos los libros."""
         return self._repositorio.leer_todos()
 
     def obtener(self, libro: Libro) -> Stock:
+        """Devuelve el stock de un libro; falla si no tiene stock cargado."""
         stock = self._repositorio.leer_por_libro(libro.id)
         if stock is None:
             raise ValueError(f"El libro '{libro.titulo}' no tiene stock cargado.")
@@ -699,6 +731,7 @@ class ServicioStock:
 
     @auditar("Modificar {objeto}")
     def modificar(self, stock: Stock) -> Stock:
+        """Guarda los cambios de un registro de stock."""
         return self._repositorio.actualizar(stock)
 
     @auditar("Ajustar stock")
@@ -712,6 +745,7 @@ class ServicioStock:
 
     @auditar("Eliminar {objeto}")
     def eliminar(self, libro: Libro) -> bool:
+        """Elimina el stock de un libro. Devuelve True si se eliminó."""
         return self._repositorio.eliminar(libro.id)
 
     @auditar("Consultar stock bajo")

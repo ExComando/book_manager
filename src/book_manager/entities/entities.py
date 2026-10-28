@@ -30,22 +30,27 @@ class EntidadBase:
     """Clase base de las entidades que se identifican por un ID entero."""
 
     def __init__(self, id: int) -> None:
+        """Crea la entidad con su identificador (un entero positivo)."""
         self.id = id
 
     @property
     def id(self) -> int:
+        """Identificador único de la entidad."""
         return self._id
 
     @id.setter
     def id(self, valor: int) -> None:
+        """Valida que el id sea un entero positivo y lo guarda."""
         if not isinstance(valor, int) or valor <= 0:
             raise ValueError("El id debe ser un entero positivo.")
         self._id = valor
 
     def __eq__(self, otro: object) -> bool:
+        """Dos entidades son iguales si son del mismo tipo y tienen el mismo id."""
         return type(self) is type(otro) and self._id == otro._id
 
     def __hash__(self) -> int:
+        """Permite usar entidades en conjuntos y diccionarios, según su tipo y su id."""
         return hash((type(self).__name__, self._id))
 
 
@@ -53,18 +58,22 @@ class Genero(EntidadBase):
     """Categoría literaria (novela, ensayo, infantil, técnico, etc.)."""
 
     def __init__(self, id: int, nombre: str) -> None:
+        """Crea un género con su id y su nombre."""
         super().__init__(id)
         self.nombre = nombre
 
     @property
     def nombre(self) -> str:
+        """Nombre del género."""
         return self._nombre
 
     @nombre.setter
     def nombre(self, valor: str) -> None:
+        """Valida que el nombre no esté vacío y lo guarda."""
         self._nombre = _validar_texto(valor, "El nombre del género")
 
     def __str__(self) -> str:
+        """Texto con el nombre del género."""
         return self._nombre
 
 
@@ -72,27 +81,33 @@ class Editorial(EntidadBase):
     """Proveedor/distribuidora que provee libros a la librería."""
 
     def __init__(self, id: int, nombre: str, pais: str = "Argentina") -> None:
+        """Crea una editorial con su id, su nombre y su país."""
         super().__init__(id)
         self.nombre = nombre
         self.pais = pais
 
     @property
     def nombre(self) -> str:
+        """Nombre de la editorial."""
         return self._nombre
 
     @nombre.setter
     def nombre(self, valor: str) -> None:
+        """Valida que el nombre no esté vacío y lo guarda."""
         self._nombre = _validar_texto(valor, "El nombre de la editorial")
 
     @property
     def pais(self) -> str:
+        """País de la editorial."""
         return self._pais
 
     @pais.setter
     def pais(self, valor: str) -> None:
+        """Valida que el país no esté vacío y lo guarda."""
         self._pais = _validar_texto(valor, "El país")
 
     def __str__(self) -> str:
+        """Texto con el nombre de la editorial y su país."""
         return f"{self._nombre} ({self._pais})"
 
 
@@ -100,6 +115,7 @@ class Moneda(EntidadBase):
     """Moneda en la que se expresa un precio (ARS, USD, etc.)."""
 
     def __init__(self, id: int, codigo: str, nombre: str, simbolo: str) -> None:
+        """Crea una moneda con su id, su código, su nombre y su símbolo."""
         super().__init__(id)
         self.codigo = codigo
         self.nombre = nombre
@@ -107,29 +123,36 @@ class Moneda(EntidadBase):
 
     @property
     def codigo(self) -> str:
+        """Código de la moneda (por ejemplo, USD), siempre en mayúsculas."""
         return self._codigo
 
     @codigo.setter
     def codigo(self, valor: str) -> None:
+        """Valida que el código no esté vacío y lo guarda en mayúsculas."""
         self._codigo = _validar_texto(valor, "El código de moneda").upper()
 
     @property
     def nombre(self) -> str:
+        """Nombre de la moneda."""
         return self._nombre
 
     @nombre.setter
     def nombre(self, valor: str) -> None:
+        """Valida que el nombre no esté vacío y lo guarda."""
         self._nombre = _validar_texto(valor, "El nombre de la moneda")
 
     @property
     def simbolo(self) -> str:
+        """Símbolo de la moneda (por ejemplo, $)."""
         return self._simbolo
 
     @simbolo.setter
     def simbolo(self, valor: str) -> None:
+        """Valida que el símbolo no esté vacío y lo guarda."""
         self._simbolo = _validar_texto(valor, "El símbolo")
 
     def __str__(self) -> str:
+        """Texto con el código y el símbolo de la moneda."""
         return f"{self._codigo} ({self._simbolo})"
 
 
@@ -137,18 +160,22 @@ class TipoCotizacion(EntidadBase):
     """Tipo de cotización del dólar (Oficial, Blue, MEP, etc.)."""
 
     def __init__(self, id: int, nombre: str) -> None:
+        """Crea un tipo de cotización con su id y su nombre."""
         super().__init__(id)
         self.nombre = nombre
 
     @property
     def nombre(self) -> str:
+        """Nombre del tipo de cotización (Oficial, Blue, etc.)."""
         return self._nombre
 
     @nombre.setter
     def nombre(self, valor: str) -> None:
+        """Valida que el nombre no esté vacío y lo guarda."""
         self._nombre = _validar_texto(valor, "El nombre del tipo de cotización")
 
     def __str__(self) -> str:
+        """Texto con el nombre del tipo de cotización."""
         return self._nombre
 
 
@@ -157,6 +184,7 @@ class Libro(EntidadBase):
 
     def __init__(self, id: int, isbn: str, titulo: str, autor: str,
                  editorial: Editorial, genero: Genero) -> None:
+        """Crea un libro con su id, ISBN, título, autor, editorial y género."""
         super().__init__(id)
         self.isbn = isbn
         self.titulo = titulo
@@ -166,10 +194,12 @@ class Libro(EntidadBase):
 
     @property
     def isbn(self) -> str:
+        """ISBN del libro: solo dígitos, sin guiones."""
         return self._isbn
 
     @isbn.setter
     def isbn(self, valor: str) -> None:
+        """Valida que el ISBN tenga 10 o 13 dígitos y lo guarda sin guiones."""
         limpio = _validar_texto(valor, "El ISBN").replace("-", "")
         if not limpio.isdigit() or len(limpio) not in (10, 13):
             raise ValueError("El ISBN debe tener 10 o 13 dígitos.")
@@ -177,41 +207,50 @@ class Libro(EntidadBase):
 
     @property
     def titulo(self) -> str:
+        """Título del libro."""
         return self._titulo
 
     @titulo.setter
     def titulo(self, valor: str) -> None:
+        """Valida que el título no esté vacío y lo guarda."""
         self._titulo = _validar_texto(valor, "El título")
 
     @property
     def autor(self) -> str:
+        """Autor del libro."""
         return self._autor
 
     @autor.setter
     def autor(self, valor: str) -> None:
+        """Valida que el autor no esté vacío y lo guarda."""
         self._autor = _validar_texto(valor, "El autor")
 
     @property
     def editorial(self) -> Editorial:
+        """Editorial que publica el libro."""
         return self._editorial
 
     @editorial.setter
     def editorial(self, valor: Editorial) -> None:
+        """Valida que sea un objeto Editorial y lo guarda."""
         if not isinstance(valor, Editorial):
             raise ValueError("La editorial debe ser un objeto Editorial.")
         self._editorial = valor
 
     @property
     def genero(self) -> Genero:
+        """Género literario del libro."""
         return self._genero
 
     @genero.setter
     def genero(self, valor: Genero) -> None:
+        """Valida que sea un objeto Genero y lo guarda."""
         if not isinstance(valor, Genero):
             raise ValueError("El género debe ser un objeto Genero.")
         self._genero = valor
 
     def __str__(self) -> str:
+        """Texto con el título, el autor y el ISBN del libro."""
         return f"{self._titulo} - {self._autor} (ISBN {self._isbn})"
 
 
@@ -219,6 +258,7 @@ class Precio(EntidadBase):
     """Valor monetario de un libro en una moneda determinada."""
 
     def __init__(self, id: int, libro: Libro, moneda: Moneda, valor) -> None:
+        """Crea un precio con su id, el libro, la moneda y el valor."""
         super().__init__(id)
         self.libro = libro
         self.moneda = moneda
@@ -226,33 +266,40 @@ class Precio(EntidadBase):
 
     @property
     def libro(self) -> Libro:
+        """Libro al que pertenece el precio."""
         return self._libro
 
     @libro.setter
     def libro(self, valor: Libro) -> None:
+        """Valida que sea un objeto Libro y lo guarda."""
         if not isinstance(valor, Libro):
             raise ValueError("El libro debe ser un objeto Libro.")
         self._libro = valor
 
     @property
     def moneda(self) -> Moneda:
+        """Moneda en la que está expresado el precio."""
         return self._moneda
 
     @moneda.setter
     def moneda(self, valor: Moneda) -> None:
+        """Valida que sea un objeto Moneda y lo guarda."""
         if not isinstance(valor, Moneda):
             raise ValueError("La moneda debe ser un objeto Moneda.")
         self._moneda = valor
 
     @property
     def valor(self) -> Decimal:
+        """Valor del precio, como Decimal."""
         return self._valor
 
     @valor.setter
     def valor(self, valor) -> None:
+        """Valida que el valor sea un monto no negativo y lo guarda."""
         self._valor = _validar_monto(valor, "El valor del precio")
 
     def __str__(self) -> str:
+        """Texto con el símbolo de la moneda y el valor."""
         return f"{self._moneda.simbolo} {self._valor:.2f}"
 
 
@@ -260,34 +307,41 @@ class Stock:
     """Cantidad disponible de un libro (un registro por libro)."""
 
     def __init__(self, libro: Libro, cantidad: int) -> None:
+        """Crea el stock de un libro con la cantidad de unidades disponibles."""
         self.libro = libro
         self.cantidad = cantidad
 
     @property
     def libro(self) -> Libro:
+        """Libro al que pertenece el stock."""
         return self._libro
 
     @libro.setter
     def libro(self, valor: Libro) -> None:
+        """Valida que sea un objeto Libro y lo guarda."""
         if not isinstance(valor, Libro):
             raise ValueError("El libro debe ser un objeto Libro.")
         self._libro = valor
 
     @property
     def libro_id(self) -> int:
+        """Id del libro, que identifica al registro de stock."""
         return self._libro.id
 
     @property
     def cantidad(self) -> int:
+        """Cantidad de unidades disponibles."""
         return self._cantidad
 
     @cantidad.setter
     def cantidad(self, valor: int) -> None:
+        """Valida que sea un entero mayor o igual a 0 y lo guarda."""
         if not isinstance(valor, int) or valor < 0:
             raise ValueError("La cantidad debe ser un entero mayor o igual a 0.")
         self._cantidad = valor
 
     def __str__(self) -> str:
+        """Texto con el título del libro y las unidades disponibles."""
         return f"{self._libro.titulo}: {self._cantidad} unidades"
 
 
@@ -296,6 +350,7 @@ class CotizacionDolar:
 
     def __init__(self, tipo: TipoCotizacion, fecha: datetime.date,
                  valor_compra, valor_venta) -> None:
+        """Crea una cotización con su tipo, su fecha y los valores de compra y venta."""
         self.tipo = tipo
         self.fecha = fecha
         self.valor_compra = valor_compra
@@ -303,45 +358,55 @@ class CotizacionDolar:
 
     @property
     def tipo(self) -> TipoCotizacion:
+        """Tipo de cotización (Oficial, Blue, etc.)."""
         return self._tipo
 
     @tipo.setter
     def tipo(self, valor: TipoCotizacion) -> None:
+        """Valida que sea un objeto TipoCotizacion y lo guarda."""
         if not isinstance(valor, TipoCotizacion):
             raise ValueError("El tipo debe ser un objeto TipoCotizacion.")
         self._tipo = valor
 
     @property
     def tipo_id(self) -> int:
+        """Id del tipo de cotización."""
         return self._tipo.id
 
     @property
     def fecha(self) -> datetime.date:
+        """Fecha de la cotización."""
         return self._fecha
 
     @fecha.setter
     def fecha(self, valor: datetime.date) -> None:
+        """Valida que sea un objeto date y lo guarda."""
         if not isinstance(valor, datetime.date):
             raise ValueError("La fecha debe ser un objeto date.")
         self._fecha = valor
 
     @property
     def valor_compra(self) -> Decimal:
+        """Valor de compra del dólar."""
         return self._valor_compra
 
     @valor_compra.setter
     def valor_compra(self, valor) -> None:
+        """Valida que el valor de compra sea un monto no negativo y lo guarda."""
         self._valor_compra = _validar_monto(valor, "El valor de compra")
 
     @property
     def valor_venta(self) -> Decimal:
+        """Valor de venta del dólar."""
         return self._valor_venta
 
     @valor_venta.setter
     def valor_venta(self, valor) -> None:
+        """Valida que el valor de venta sea un monto no negativo y lo guarda."""
         self._valor_venta = _validar_monto(valor, "El valor de venta")
 
     def __str__(self) -> str:
+        """Texto con el tipo, la fecha y los valores de compra y venta."""
         return (f"{self._tipo} {self._fecha}: compra {self._valor_compra} / "
                 f"venta {self._valor_venta}")
 

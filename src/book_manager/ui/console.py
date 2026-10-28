@@ -12,8 +12,8 @@ from book_manager.services.services import (
     ServicioTipoCotizacion, auditar)
 
 T = TypeVar("T")
-Opcion = Tuple[str, Callable[[], None]]
-LIMITE_HISTORIAL = 100   # cuántas operaciones muestra "Ver historial de auditoría
+Opcion = Tuple[str, Callable[[], object]]
+LIMITE_HISTORIAL = 100  # cuántas operaciones muestra "Ver historial de auditoría"
 
 
 # ---------------------------------------------------------------- entrada de datos
@@ -101,20 +101,24 @@ def elegir(titulo: str, opciones: Sequence[T], describir: Callable[[T], str]) ->
 
 # ---------------------------------------------------------------- descripciones
 def _describir_libro(libro: Libro) -> str:
+    """Resume un libro en una línea: título, autor, editorial, género e ISBN."""
     return (f"{libro.titulo} - {libro.autor} | {libro.editorial.nombre} | "
             f"{libro.genero.nombre} | ISBN {libro.isbn}")
 
 
 def _describir_precio(precio: Precio) -> str:
+    """Resume un precio en una línea: libro, símbolo, valor y código de moneda."""
     return (f"{precio.libro.titulo}: {precio.moneda.simbolo} {precio.valor:,.2f} "
             f"({precio.moneda.codigo})")
 
 
 def _describir_stock(stock: Stock) -> str:
+    """Resume el stock en una línea: libro y unidades disponibles."""
     return f"{stock.libro.titulo}: {stock.cantidad} unidades"
 
 
 def _describir_cotizacion(cotizacion: CotizacionDolar) -> str:
+    """Resume una cotización en una línea: tipo, fecha, compra y venta."""
     return (f"{cotizacion.tipo.nombre} {cotizacion.fecha}: "
             f"compra ${cotizacion.valor_compra:,.2f} / venta ${cotizacion.valor_venta:,.2f}")
 
@@ -127,6 +131,7 @@ class Consola:
                  libros: ServicioLibro, precios: ServicioPrecio,
                  stock: ServicioStock, cotizaciones: ServicioCotizacionDolar,
                  scraping: ServicioScraping, auditoria: ServicioAuditoria) -> None:
+        """Guarda los servicios con los que el menú realiza todas las operaciones."""
         self._generos = generos
         self._editoriales = editoriales
         self._monedas = monedas
@@ -199,6 +204,7 @@ class Consola:
 
     # ------------------------------------------------------------ géneros
     def _menu_generos(self) -> None:
+        """Submenú de géneros: listar, alta, modificación y baja."""
         self._menu("GÉNEROS", [
             ("Listar", lambda: self._listar("Géneros", self._generos.listar(), str)),
             ("Alta", self._alta_genero),
@@ -207,10 +213,12 @@ class Consola:
         ])
 
     def _alta_genero(self) -> None:
+        """Pide el nombre y da de alta un género."""
         genero = self._generos.crear(pedir_texto("Nombre del género"))
         print(f"Creado: {genero}")
 
     def _modificar_genero(self) -> None:
+        """Elige un género y modifica su nombre."""
         genero = elegir("Géneros", self._generos.listar(), str)
         genero.nombre = pedir_texto("Nombre", genero.nombre)
         self._generos.modificar(genero)
@@ -218,6 +226,7 @@ class Consola:
 
     # ------------------------------------------------------------ editoriales
     def _menu_editoriales(self) -> None:
+        """Submenú de editoriales: listar, alta, modificación y baja."""
         self._menu("EDITORIALES", [
             ("Listar", lambda: self._listar("Editoriales", self._editoriales.listar(), str)),
             ("Alta", self._alta_editorial),
@@ -226,11 +235,13 @@ class Consola:
         ])
 
     def _alta_editorial(self) -> None:
+        """Pide el nombre y el país y da de alta una editorial."""
         nombre = pedir_texto("Nombre de la editorial")
         pais = pedir_texto("País", "Argentina")
         print(f"Creada: {self._editoriales.crear(nombre, pais)}")
 
     def _modificar_editorial(self) -> None:
+        """Elige una editorial y modifica su nombre y su país."""
         editorial = elegir("Editoriales", self._editoriales.listar(), str)
         editorial.nombre = pedir_texto("Nombre", editorial.nombre)
         editorial.pais = pedir_texto("País", editorial.pais)
@@ -239,6 +250,7 @@ class Consola:
 
     # ------------------------------------------------------------ monedas
     def _menu_monedas(self) -> None:
+        """Submenú de monedas: listar, alta, modificación y baja."""
         self._menu("MONEDAS", [
             ("Listar", lambda: self._listar("Monedas", self._monedas.listar(),
                                             lambda m: f"{m} - {m.nombre}")),
@@ -248,12 +260,14 @@ class Consola:
         ])
 
     def _alta_moneda(self) -> None:
+        """Pide código, nombre y símbolo y da de alta una moneda."""
         codigo = pedir_texto("Código (ej. USD)")
         nombre = pedir_texto("Nombre")
         simbolo = pedir_texto("Símbolo")
         print(f"Creada: {self._monedas.crear(codigo, nombre, simbolo)}")
 
     def _modificar_moneda(self) -> None:
+        """Elige una moneda y modifica su nombre y su símbolo (el código no se cambia)."""
         moneda = elegir("Monedas", self._monedas.listar(), str)
         moneda.nombre = pedir_texto("Nombre", moneda.nombre)
         moneda.simbolo = pedir_texto("Símbolo", moneda.simbolo)
@@ -262,6 +276,7 @@ class Consola:
 
     # ------------------------------------------------------------ tipos de cotización
     def _menu_tipos(self) -> None:
+        """Submenú de tipos de cotización: listar, alta, modificación y baja."""
         self._menu("TIPOS DE COTIZACIÓN", [
             ("Listar", lambda: self._listar("Tipos de cotización", self._tipos.listar(), str)),
             ("Alta", self._alta_tipo),
@@ -270,9 +285,11 @@ class Consola:
         ])
 
     def _alta_tipo(self) -> None:
+        """Pide el nombre y da de alta un tipo de cotización."""
         print(f"Creado: {self._tipos.crear(pedir_texto('Nombre del tipo'))}")
 
     def _modificar_tipo(self) -> None:
+        """Elige un tipo de cotización y modifica su nombre."""
         tipo = elegir("Tipos de cotización", self._tipos.listar(), str)
         tipo.nombre = pedir_texto("Nombre", tipo.nombre)
         self._tipos.modificar(tipo)
@@ -280,6 +297,7 @@ class Consola:
 
     # ------------------------------------------------------------ libros
     def _menu_libros(self) -> None:
+        """Submenú de libros: listar, alta, modificación, baja y búsqueda por título o autor."""
         self._menu("LIBROS", [
             ("Listar", lambda: self._listar("Libros", self._libros.listar(), _describir_libro)),
             ("Alta", self._alta_libro),
@@ -290,6 +308,7 @@ class Consola:
         ])
 
     def _alta_libro(self) -> None:
+        """Pide ISBN, título, autor, editorial y género, y da de alta un libro."""
         isbn = pedir_texto("ISBN (10 o 13 dígitos)")
         titulo = pedir_texto("Título")
         autor = pedir_texto("Autor")
@@ -298,6 +317,7 @@ class Consola:
         print(f"Creado: {self._libros.crear(isbn, titulo, autor, editorial, genero)}")
 
     def _modificar_libro(self) -> None:
+        """Elige un libro y modifica sus datos; cambia editorial y género solo si se confirma."""
         libro = elegir("Libros", self._libros.listar(), _describir_libro)
         libro.isbn = pedir_texto("ISBN", libro.isbn)
         libro.titulo = pedir_texto("Título", libro.titulo)
@@ -310,11 +330,13 @@ class Consola:
         print("Modificado.")
 
     def _buscar_libro(self) -> None:
+        """Busca libros por título o autor y muestra los resultados."""
         resultados = self._libros.buscar(pedir_texto("Texto a buscar"))
         self._listar("Resultados", resultados, _describir_libro)
 
     # ------------------------------------------------------------ precios
     def _menu_precios(self) -> None:
+        """Submenú de precios: listar, alta, modificación y baja."""
         self._menu("PRECIOS", [
             ("Listar", lambda: self._listar("Precios", self._precios.listar(), _describir_precio)),
             ("Alta", self._alta_precio),
@@ -323,12 +345,14 @@ class Consola:
         ])
 
     def _alta_precio(self) -> None:
+        """Elige un libro y una moneda, pide el valor y da de alta el precio."""
         libro = elegir("Libros", self._libros.listar(), _describir_libro)
         moneda = elegir("Monedas", self._monedas.listar(), str)
         valor = pedir_decimal(f"Precio en {moneda.codigo}")
         print(f"Creado: {self._precios.crear(libro, moneda, valor)}")
 
     def _modificar_precio(self) -> None:
+        """Elige un precio y modifica su valor."""
         precio = elegir("Precios", self._precios.listar(), _describir_precio)
         precio.valor = pedir_decimal("Nuevo valor", precio.valor)
         self._precios.modificar(precio)
@@ -336,6 +360,7 @@ class Consola:
 
     # ------------------------------------------------------------ stock
     def _menu_stock(self) -> None:
+        """Submenú de stock: listar, alta, modificación, ajuste y baja."""
         self._menu("STOCK", [
             ("Listar", lambda: self._listar("Stock", self._stock.listar(), _describir_stock)),
             ("Alta", self._alta_stock),
@@ -345,22 +370,26 @@ class Consola:
         ])
 
     def _alta_stock(self) -> None:
+        """Elige un libro y da de alta su stock con la cantidad inicial."""
         libro = elegir("Libros", self._libros.listar(), _describir_libro)
         cantidad = pedir_entero("Cantidad inicial")
         print(f"Creado: {self._stock.crear(libro, cantidad)}")
 
     def _modificar_stock(self) -> None:
+        """Elige un registro de stock y modifica su cantidad."""
         stock = elegir("Stock", self._stock.listar(), _describir_stock)
         stock.cantidad = pedir_entero("Nueva cantidad", stock.cantidad)
         self._stock.modificar(stock)
         print("Modificado.")
 
     def _ajustar_stock(self) -> None:
+        """Elige un registro de stock y le suma o le resta unidades."""
         stock = elegir("Stock", self._stock.listar(), _describir_stock)
         delta = pedir_entero("Unidades a sumar (negativo para restar)", minimo=None)
         print(f"Resultado: {self._stock.ajustar(stock.libro, delta)}")
 
     def _baja_stock(self) -> None:
+        """Elige un registro de stock y lo elimina si se confirma."""
         stock = elegir("Stock", self._stock.listar(), _describir_stock)
         if confirmar(f"¿Eliminar el stock de '{stock.libro.titulo}'?"):
             self._stock.eliminar(stock.libro)
@@ -368,6 +397,7 @@ class Consola:
 
     # ------------------------------------------------------------ cotizaciones
     def _menu_cotizaciones(self) -> None:
+        """Submenú de cotizaciones: listar, alta manual, modificación, baja y obtención por API."""
         self._menu("COTIZACIONES DEL DÓLAR", [
             ("Listar", lambda: self._listar("Cotizaciones", self._cotizaciones.listar(),
                                             _describir_cotizacion)),
@@ -378,6 +408,7 @@ class Consola:
         ])
 
     def _alta_cotizacion(self) -> None:
+        """Pide tipo, fecha, compra y venta y registra una cotización a mano."""
         tipo = elegir("Tipos de cotización", self._tipos.listar(), str)
         fecha = pedir_fecha("Fecha", datetime.date.today())
         compra = pedir_decimal("Valor de compra")
@@ -385,6 +416,7 @@ class Consola:
         print(f"Creada: {self._cotizaciones.registrar(tipo, fecha, compra, venta)}")
 
     def _modificar_cotizacion(self) -> None:
+        """Elige una cotización y modifica sus valores de compra y venta."""
         cotizacion = elegir("Cotizaciones", self._cotizaciones.listar(), _describir_cotizacion)
         cotizacion.valor_compra = pedir_decimal("Compra", cotizacion.valor_compra)
         cotizacion.valor_venta = pedir_decimal("Venta", cotizacion.valor_venta)
@@ -392,17 +424,20 @@ class Consola:
         print("Modificada.")
 
     def _baja_cotizacion(self) -> None:
+        """Elige una cotización y la elimina si se confirma."""
         cotizacion = elegir("Cotizaciones", self._cotizaciones.listar(), _describir_cotizacion)
         if confirmar(f"¿Eliminar '{_describir_cotizacion(cotizacion)}'?"):
             self._cotizaciones.eliminar(cotizacion.tipo, cotizacion.fecha)
             print("Eliminada.")
 
     def _actualizar_cotizacion(self) -> None:
+        """Obtiene las cotizaciones de la API, las registra y muestra las obtenidas."""
         registradas = self._cotizaciones.obtener_cotizaciones()
         self._listar("Cotizaciones obtenidas de la API", registradas, _describir_cotizacion)
 
     # ------------------------------------------------------------ precios: lista y exportación
     def _lista_bimonetaria(self) -> None:
+        """Muestra cada libro con su precio en pesos (según el dólar elegido) y en otra moneda."""
         monedas = self._precios.monedas_con_precio(excluir_codigo="ARS")
         if not monedas:
             raise ValueError("No hay precios en otra moneda además de pesos.")
@@ -425,6 +460,7 @@ class Consola:
             print(f"{titulo:<{ancho}} {pesos:>16} {otra:>14}")
 
     def _exportar_precios(self) -> None:
+        """Exporta los precios de todos los libros, en todas las monedas, a un CSV."""
         nombre = input("Nombre del archivo [precios.csv]: ").strip() or "precios.csv"
         ruta, cantidad = self._precios.exportar_precios_csv(nombre)
         print(f"Se exportaron los precios de {cantidad} libros en todas las monedas.")
@@ -468,6 +504,7 @@ class Consola:
 
     # ------------------------------------------------------------ reportes
     def _menu_reportes(self) -> None:
+        """Submenú de reportes: stock bajo, cotización de un libro y catálogo cotizado."""
         self._menu("REPORTES", [
             ("Libros con stock bajo", self._reporte_stock_bajo),
             ("Cotizar un libro en pesos", self._reporte_cotizar_libro),
@@ -475,19 +512,34 @@ class Consola:
         ])
 
     def _reporte_stock_bajo(self) -> None:
+        """Muestra los libros con stock menor o igual al umbral indicado."""
         umbral = pedir_entero("Mostrar libros con stock menor o igual a", 5)
         self._listar("Stock bajo", self._stock.con_stock_bajo(umbral), _describir_stock)
 
-    def _reporte_cotizar_libro(self) -> None:
+    @auditar("Reporte: cotizar un libro en pesos",
+             detalle=lambda argumentos, resultado: resultado)
+    def _reporte_cotizar_libro(self) -> str:
+        """Muestra el precio en pesos de un libro según el dólar elegido.
+
+        Devuelve un resumen del resultado, que se guarda en la auditoría.
+        """
         libro = elegir("Libros", self._libros.listar(), _describir_libro)
         tipo = elegir("Tipos de cotización", self._tipos.listar(), str)
         pesos = self._precios.cotizar_en_pesos(libro, tipo)
         print(f"\n'{libro.titulo}' cotizado al dólar {tipo.nombre}: ${pesos:,.2f}")
+        return f"'{libro.titulo}' al dólar {tipo.nombre}: ${pesos:,.2f}"
 
-    def _reporte_catalogo(self) -> None:
+    @auditar("Reporte: catálogo cotizado e inventario",
+             detalle=lambda argumentos, resultado: resultado)
+    def _reporte_catalogo(self) -> str:
+        """Muestra el catálogo cotizado en pesos y calcula el valor total del inventario.
+
+        Devuelve un resumen del resultado, que se guarda en la auditoría.
+        """
         tipo = elegir("Tipos de cotización", self._tipos.listar(), str)
         cantidades: Dict[int, int] = {s.libro_id: s.cantidad for s in self._stock.listar()}
         total = Decimal("0")
+        cotizados = 0
         print(f"\n--- Catálogo cotizado al dólar {tipo.nombre} ---")
         for libro in self._libros.listar():
             try:
@@ -497,5 +549,8 @@ class Consola:
                 continue
             cantidad = cantidades.get(libro.id, 0)
             total += pesos * cantidad
+            cotizados += 1
             print(f"- {libro.titulo}: ${pesos:,.2f} x {cantidad} u.")
         print(f"\nValor total del inventario: ${total:,.2f}")
+        return (f"dólar {tipo.nombre}: {cotizados} libros cotizados, "
+                f"inventario valuado en ${total:,.2f}")
